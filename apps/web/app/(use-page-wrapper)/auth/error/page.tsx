@@ -3,6 +3,7 @@ import { _generateMetadata, getTranslate } from "app/_utils";
 import Link from "next/link";
 import { z } from "zod";
 
+import { IdentityProvider } from "@calcom/prisma/client";
 import { Button } from "@calcom/ui/components/button";
 import { Icon } from "@calcom/ui/components/icon";
 
@@ -17,12 +18,40 @@ export const generateMetadata = async () => {
 
 const querySchema = z.object({
   error: z.string().optional(),
+  provider: z.string().optional(),
 });
+
+// Update getErrorMessage to use provider info
 
 const ServerPage = async ({ searchParams }: PageProps) => {
   const t = await getTranslate();
-  const { error } = querySchema.parse({ error: (await searchParams)?.error || undefined });
-  const errorMsg = t("error_during_login") + (error ? ` Error code: ${error}` : "");
+  const { error, provider } = querySchema.parse({
+    error: (await searchParams)?.error || undefined,
+    provider: (await searchParams)?.provider || undefined,
+  });
+
+  const getErrorMessage = (error: string | undefined, provider: string | undefined) => {
+    console.log("function call reached here -----------");
+    console.log("error: ", error);
+    console.log("provider: ", provider);
+    if (error === "use-identity-login") {
+      console.log("------inside: -------");
+      // Format message based on provider
+      const providerName =
+        provider === IdentityProvider.GOOGLE
+          ? "Google"
+          : provider === IdentityProvider.CAL
+          ? "email/password"
+          : provider === IdentityProvider.SAML
+          ? "SAML"
+          : "your original login method";
+      return `${t("identity_provider_error")} ${providerName}`;
+    }
+    return t("error_during_login") + (error ? ` Error code: ${error}` : "");
+  };
+
+  const errorMsg = getErrorMessage(error, provider);
+
   return (
     <AuthContainer>
       <div>
