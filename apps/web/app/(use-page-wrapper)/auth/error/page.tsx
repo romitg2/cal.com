@@ -21,21 +21,17 @@ const querySchema = z.object({
   provider: z.string().optional(),
 });
 
-// Update getErrorMessage to use provider info
-
 const ServerPage = async ({ searchParams }: PageProps) => {
   const t = await getTranslate();
+
   const { error, provider } = querySchema.parse({
     error: (await searchParams)?.error || undefined,
     provider: (await searchParams)?.provider || undefined,
   });
 
+  // generate error message based on different errors
   const getErrorMessage = (error: string | undefined, provider: string | undefined) => {
-    console.log("function call reached here -----------");
-    console.log("error: ", error);
-    console.log("provider: ", provider);
     if (error === "use-identity-login") {
-      console.log("------inside: -------");
       // Format message based on provider
       const providerName =
         provider === IdentityProvider.GOOGLE
