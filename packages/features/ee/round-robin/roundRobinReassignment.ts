@@ -99,6 +99,7 @@ export const roundRobinReassignment = async ({
     ? eventType.hosts
     : eventType.users.map((user) => ({
         user,
+        isOrganizer: false,
         isFixed: false,
         priority: 2,
         weight: 100,
@@ -155,6 +156,7 @@ export const roundRobinReassignment = async ({
     routingFormResponse: null,
   });
 
+  // TODO: use isOrganizer flag on hosts to determine organizer
   const hasOrganizerChanged = !previousRRHost || booking.userId === previousRRHost?.id;
   const organizer = hasOrganizerChanged ? reassignedRRHost : booking.user;
   const organizerT = await getTranslation(organizer?.locale || "en", "common");

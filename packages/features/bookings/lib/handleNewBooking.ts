@@ -800,7 +800,7 @@ async function handler(
   const fixedOrganizerUser = fixedUsers.find((user) => user.id === organizerHostId);
 
   // If the team member is requested then they should be the organizer
-  let organizerUser;
+  let organizerUser: (typeof users)[number];
   if (reqBody.teamMemberEmail) {
     organizerUser = users.find((user) => user.email === reqBody.teamMemberEmail) ?? users[0];
   } else {
