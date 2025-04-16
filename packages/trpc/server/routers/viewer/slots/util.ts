@@ -1,5 +1,6 @@
 // eslint-disable-next-line no-restricted-imports
 import { countBy } from "lodash";
+import { getToken } from "next-auth/jwt";
 import type { Logger } from "tslog";
 import { v4 as uuid } from "uuid";
 
@@ -299,8 +300,40 @@ async function _getAvailableSlots({ input, ctx }: GetScheduleOptions): Promise<I
 
   const eventType = await monitorCallbackAsync(getRegularOrDynamicEventType, input, orgDetails);
 
+  let userId: string | null = null;
+  try {
+    const token = await getToken({ req: ctx.req as any }); // ctx.req is available in context
+    userId = token?.sub ?? null; // sub is user id in NextAuth JWT by default
+  } catch {
+    userId = null;
+  }
+
   if (!eventType) {
     throw new TRPCError({ code: "NOT_FOUND" });
+  }
+  console.log("------- matched --------");
+  console.log("------- matched --------");
+  console.log("------- matched --------");
+  console.log("------- matched --------");
+  console.log("------- matched --------");
+  console.log("------- matched --------");
+  console.log("------- matched --------");
+
+  eventType.users.forEach((user) => {
+    console.log("user", user.id, typeof user.id);
+  });
+
+  console.log("context userid", userId, typeof userId);
+
+  if (eventType.users.some((user) => Number(user.id) === Number(userId))) {
+    console.log("------- matched --------");
+    console.log("------- matched --------");
+    console.log("------- matched --------");
+    console.log("------- matched --------");
+    console.log("------- matched --------");
+    console.log("------- matched --------");
+    console.log("------- matched --------");
+    eventType.minimumBookingNotice = 0;
   }
 
   const shouldServeCache = await getShouldServeCache(_shouldServeCache, eventType.team?.id);
@@ -472,7 +505,7 @@ async function _getAvailableSlots({ input, ctx }: GetScheduleOptions): Promise<I
   const timeSlots = monitorCallbackSync(getSlots, {
     inviteeDate: startTime,
     eventLength: input.duration || eventType.length,
-    offsetStart: eventType.offsetStart,
+    offsetStart: eventType.offsetStart ?? 0,
     dateRanges: aggregatedAvailability,
     minimumBookingNotice: eventType.minimumBookingNotice,
     frequency: eventType.slotInterval || input.duration || eventType.length,

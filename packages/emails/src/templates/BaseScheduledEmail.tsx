@@ -26,7 +26,7 @@ export const BaseScheduledEmail = (
     t: TFunction;
     locale: string;
     timeFormat: TimeFormat | undefined;
-    isOrganizer?: boolean;
+    isOrganizer: boolean;
     reassigned?: { name: string | null; email: string; reason?: string; byUser?: string };
   } & Partial<React.ComponentProps<typeof BaseEmailHtml>>
 ) => {

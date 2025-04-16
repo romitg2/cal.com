@@ -330,6 +330,7 @@ const BookerComponent = ({
             !isEmbed && layout === BookerLayouts.MONTH_VIEW && `border-subtle border`,
             `${customClassNames?.bookerContainer}`
           )}>
+          <div>now here</div>
           <AnimatePresence>
             {!isInstantMeeting && (
               <BookerSection

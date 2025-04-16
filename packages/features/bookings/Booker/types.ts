@@ -141,7 +141,7 @@ export type WrappedBookerPropsForWeb = WrappedBookerPropsMain & {
 export type WrappedBookerProps = WrappedBookerPropsForPlatform | WrappedBookerPropsForWeb;
 
 export type BookerState = "loading" | "selecting_date" | "selecting_time" | "booking";
-export type BookerLayout = BookerLayouts | "mobile";
+export type BookerLayout = BookerLayouts | "mobile" | "tablet";
 export type BookerAreas = "calendar" | "timeslots" | "main" | "meta" | "header";
 
 export type CustomClassNames = {

@@ -21,6 +21,13 @@ interface ReserveSlotOptions {
   input: TReserveSlotInputSchema;
 }
 export const reserveSlotHandler = async ({ ctx, input }: ReserveSlotOptions) => {
+  console.log("----------------- reserving slot ----------------------");
+  console.log("----------------- reserving slot ----------------------");
+  console.log("----------------- reserving slot ----------------------");
+  console.log("----------------- reserving slot ----------------------");
+  console.log("----------------- reserving slot ----------------------");
+  console.log("----------------- reserving slot ----------------------");
+  console.log("----------------- reserving slot ----------------------");
   const { prisma, req, res } = ctx;
   const uid = req?.cookies?.uid || uuid();
   const { slotUtcStartDate, slotUtcEndDate, eventTypeId, bookingUid, _isDryRun } = input;

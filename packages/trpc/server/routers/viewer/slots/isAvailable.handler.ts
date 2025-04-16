@@ -1,4 +1,5 @@
 import type { NextApiRequest } from "next";
+import { getToken } from "next-auth/jwt";
 
 import { HttpError } from "@calcom/lib/http-error";
 import { getPastTimeAndMinimumBookingNoticeBoundsStatus } from "@calcom/lib/isOutOfBounds";
@@ -33,6 +34,14 @@ export const isAvailableHandler = async ({
 
   // Get event type details for time bounds validation
   const eventType = await EventTypeRepository.findByIdMinimal({ id: eventTypeId });
+
+  let userId: string | null = null;
+  try {
+    const token = await getToken({ req: ctx.req as any }); // ctx.req is available in context
+    userId = token?.sub ?? null; // sub is user id in NextAuth JWT by default
+  } catch {
+    userId = null;
+  }
 
   if (!eventType) {
     throw new HttpError({ statusCode: 404, message: "Event type not found" });

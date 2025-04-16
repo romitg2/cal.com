@@ -94,6 +94,17 @@ export const resizeAnimationConfig: ResizeAnimationConfig = {
       gridTemplateColumns: "var(--booker-meta-width) 1fr var(--booker-timeslots-width)",
       gridTemplateRows: "1fr 0fr",
     },
+    selecting_time_tablet: {
+      width: "calc(var(--booker-meta-width) + var(--booker-main-width) + var(--booker-timeslots-width))",
+      minHeight: "450px",
+      height: "auto",
+      gridTemplateAreas: `
+      "meta timeslots main"
+      "meta timeslots main"
+      `,
+      gridTemplateColumns: "var(--booker-meta-width) 1fr var(--booker-timeslots-width)",
+      gridTemplateRows: "1fr 0fr",
+    },
   },
   week_view: {
     default: {

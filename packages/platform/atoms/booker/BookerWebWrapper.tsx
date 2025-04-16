@@ -48,6 +48,8 @@ export const BookerWebWrapper = (props: BookerWebWrapperAtomProps) => {
       }
     : clientFetchedEvent;
 
+  console.log("---------- event ------------", event);
+
   const bookerLayout = useBookerLayout(event.data);
 
   const selectedDate = searchParams?.get("date");
@@ -159,6 +161,7 @@ export const BookerWebWrapper = (props: BookerWebWrapperAtomProps) => {
     fromRedirectOfNonOrgLink: props.entity.fromRedirectOfNonOrgLink,
     isTeamEvent: props.isTeamEvent ?? !!event.data?.team,
   });
+  console.log("---------- schedule ------------", schedule);
   const bookings = useBookings({
     event,
     hashedLink: props.hashedLink,
