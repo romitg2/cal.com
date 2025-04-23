@@ -147,6 +147,9 @@ const getEventType = async ({
   eventTypeSlug?: string;
 }) => {
   // handle dynamic user
+  console.log("executing.......");
+  console.log("executing.......");
+  console.log("executing.......");
   const eventType =
     !eventTypeId && !!eventTypeSlug ? getDefaultEvent(eventTypeSlug) : await getEventTypesFromDB(eventTypeId);
 
@@ -345,11 +348,15 @@ async function handler(
   } = input;
 
   const isPlatformBooking = !!platformClientId;
+  console.log("--------- reached till here ---------");
+  console.log("--------- reached till here ---------");
 
   const eventType = await monitorCallbackAsync(getEventType, {
     eventTypeId: rawBookingData.eventTypeId,
     eventTypeSlug: rawBookingData.eventTypeSlug,
   });
+
+  console.log("-------- eventType team members data -----------", eventType);
 
   const bookingDataSchema = bookingDataSchemaGetter({
     view: rawBookingData.rescheduleUid ? "reschedule" : "booking",
@@ -947,6 +954,8 @@ async function handler(
   const teamMembers = await Promise.all(teamMemberPromises);
 
   const attendeesList = [...invitee, ...guests];
+
+  console.log("attendee list: -------------", attendeesList);
 
   const responses = reqBody.responses || null;
   const evtName = !eventType?.isDynamic ? eventType.eventName : responses?.title;
