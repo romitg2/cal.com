@@ -170,7 +170,7 @@ export const updateHandler = async ({ ctx, input }: UpdateOptions) => {
   const areGuestsFromTeam = guests?.every((guest) =>
     eventType.team?.members.some((member) => member.user.id === guest)
   );
-  if (!areGuestsFromTeam) {
+  if (guests && !areGuestsFromTeam) {
     throw new TRPCError({ code: "BAD_REQUEST" });
   }
 

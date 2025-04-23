@@ -146,6 +146,11 @@ export const getEventTypesFromDB = async (eventTypeId: number) => {
           },
         },
       },
+      guests: {
+        select: {
+          ...userSelect.select,
+        },
+      },
       availability: {
         select: {
           date: true,
