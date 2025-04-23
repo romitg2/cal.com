@@ -135,6 +135,7 @@ export type FormValues = {
   onlyShowFirstAvailableSlot: boolean;
   children: ChildrenEventType[];
   hosts: Host[];
+  guests: number[];
   bookingFields: z.infer<typeof eventTypeBookingFields>;
   availability?: AvailabilityOption;
   bookerLayouts: BookerLayoutSettings;

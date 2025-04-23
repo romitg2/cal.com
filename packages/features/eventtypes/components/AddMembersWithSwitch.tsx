@@ -77,6 +77,7 @@ const CheckedHostField = ({
     <div className="flex flex-col rounded-md">
       <div>
         {labelText ? <Label>{labelText}</Label> : <></>}
+        <div>again here</div>
         <CheckedTeamSelect
           isOptionDisabled={(option) => !!value.find((host) => host.userId.toString() === option.value)}
           onChange={(options) => {
@@ -108,6 +109,7 @@ const CheckedHostField = ({
           customClassNames={customClassNames}
           {...rest}
         />
+        <div>again here ends</div>
       </div>
     </div>
   );
@@ -311,6 +313,7 @@ export function AddMembersWithSwitch({
             )}
           </div>
           <div className="mb-2">
+            <div>start</div>
             <CheckedHostField
               data-testid={rest["data-testid"]}
               value={value}
@@ -322,6 +325,7 @@ export function AddMembersWithSwitch({
               isRRWeightsEnabled={isRRWeightsEnabled}
               customClassNames={customClassNames?.teamMemberSelect}
             />
+            <div>end</div>
           </div>
         </>
       );

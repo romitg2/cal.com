@@ -77,6 +77,7 @@ model EventType {
   offsetStart Int     @default(0)
   hidden      Boolean @default(false)
   hosts       Host[]
+  guests      User[]  @relation("guest_eventtype")
   users       User[]  @relation("user_eventtype")
   owner       User?   @relation("owner", fields: [userId], references: [id], onDelete: Cascade)
   userId      Int?
@@ -343,6 +344,7 @@ model User {
   verifiedNumbers      VerifiedNumber[]
   verifiedEmails       VerifiedEmail[]
   hosts                Host[]
+  guests               EventType[]             @relation("guest_eventtype")
   // organizationId is deprecated. Instead, rely on the Profile to search profiles by organizationId and then get user from the profile.
   organizationId       Int?
   organization         Team?                   @relation("scope", fields: [organizationId], references: [id], onDelete: SetNull)

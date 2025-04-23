@@ -83,8 +83,11 @@ export const updateHandler = async ({ ctx, input }: UpdateOptions) => {
     description: newDescription,
     title: newTitle,
     seatsPerTimeSlot,
+    guests,
     ...rest
   } = input;
+
+  console.log("-------- guests data received -----------", guests);
 
   const eventType = await ctx.prisma.eventType.findUniqueOrThrow({
     where: { id },
@@ -163,6 +166,14 @@ export const updateHandler = async ({ ctx, input }: UpdateOptions) => {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
 
+  console.log("-------- eventType team members data -----------", eventType.team?.members);
+  const areGuestsFromTeam = guests?.every((guest) =>
+    eventType.team?.members.some((member) => member.user.id === guest)
+  );
+  if (!areGuestsFromTeam) {
+    throw new TRPCError({ code: "BAD_REQUEST" });
+  }
+
   const finalSeatsPerTimeSlot = seatsPerTimeSlot ?? eventType.seatsPerTimeSlot;
   const finalRecurringEvent = recurringEvent ?? eventType.recurringEvent;
 
@@ -187,6 +198,9 @@ export const updateHandler = async ({ ctx, input }: UpdateOptions) => {
 
   const data: Prisma.EventTypeUpdateInput = {
     ...rest,
+    guests: {
+      set: guests?.map((id) => ({ id })),
+    },
     // autoTranslate feature is allowed for org users only
     autoTranslateDescriptionEnabled: !!(ctx.user.organizationId && autoTranslateDescriptionEnabled),
     description: newDescription,

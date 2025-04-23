@@ -597,6 +597,11 @@ export class EventTypeRepository {
           scheduleId: true,
         },
       },
+      guests: {
+        select: {
+          id: true,
+        },
+      },
       userId: true,
       price: true,
       children: {

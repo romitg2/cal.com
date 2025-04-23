@@ -74,6 +74,7 @@ export const useEventTypeForm = ({
         endDate: periodDates.endDate,
       },
       hideCalendarNotes: eventType.hideCalendarNotes,
+      guests: eventType.guests.map((guest) => guest.id),
       hideCalendarEventDetails: eventType.hideCalendarEventDetails,
       offsetStart: eventType.offsetStart,
       bookingFields: eventType.bookingFields,

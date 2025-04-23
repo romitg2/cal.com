@@ -53,6 +53,8 @@ export const getEventTypeById = async ({
 
   const rawEventType = await EventTypeRepository.findById({ id: eventTypeId, userId });
 
+  console.log("---------- raw event type data ----------------", rawEventType);
+
   if (!rawEventType) {
     if (isTrpcCall) {
       throw new TRPCError({ code: "NOT_FOUND" });

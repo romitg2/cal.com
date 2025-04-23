@@ -93,6 +93,11 @@ export type EventTypeWebWrapperProps = {
 
 export const EventTypeWebWrapper = ({ id, data }: EventTypeWebWrapperProps) => {
   const { data: eventTypeQueryData } = trpc.viewer.eventTypes.get.useQuery({ id }, { initialData: data });
+  console.log("-------eventTypeQueryData -------", eventTypeQueryData);
+  console.log(
+    "team member's user Ids",
+    eventTypeQueryData?.teamMembers?.map((member) => member.id)
+  );
 
   if (!eventTypeQueryData) return null;
 
@@ -210,6 +215,7 @@ const EventTypeWeb = ({ id, ...rest }: EventTypeSetupProps & { id: number }) => 
       <EventAdvancedTab
         eventType={eventType}
         team={team}
+        teamMembers={teamMembers}
         user={user}
         isUserLoading={isLoggedInUserPending}
         showToast={showToast}

@@ -17,7 +17,7 @@ import {
   allowDisablingAttendeeConfirmationEmails,
   allowDisablingHostConfirmationEmails,
 } from "@calcom/features/ee/workflows/lib/allowDisablingStandardEmails";
-import { MultiplePrivateLinksController } from "@calcom/features/eventtypes/components";
+import { CheckedTeamSelect, MultiplePrivateLinksController } from "@calcom/features/eventtypes/components";
 import type {
   FormValues,
   EventTypeSetupProps,
@@ -104,7 +104,7 @@ export type EventAdvancedTabCustomClassNames = {
 
 type BookingField = z.infer<typeof fieldSchema>;
 
-export type EventAdvancedBaseProps = Pick<EventTypeSetupProps, "eventType" | "team"> & {
+export type EventAdvancedBaseProps = Pick<EventTypeSetupProps, "eventType" | "team" | "teamMembers"> & {
   user?: Partial<
     Pick<RouterOutputs["viewer"]["me"]["get"], "email" | "secondaryEmails" | "theme" | "defaultBookerLayouts">
   >;
@@ -393,6 +393,7 @@ const calendarComponents = {
 export const EventAdvancedTab = ({
   eventType,
   team,
+  teamMembers,
   calendarsQuery,
   user,
   isUserLoading,
@@ -447,6 +448,8 @@ export const EventAdvancedTab = ({
   const isRecurringEvent = !!formMethods.getValues("recurringEvent");
   const isRoundRobinEventType =
     eventType.schedulingType && eventType.schedulingType === SchedulingType.ROUND_ROBIN;
+  const isTeamEvent =
+    eventType.schedulingType && ["ROUND_ROBIN", "COLLECTIVE"].includes(eventType.schedulingType);
 
   const toggleGuests = (enabled: boolean) => {
     const bookingFields = formMethods.getValues("bookingFields");
@@ -512,6 +515,8 @@ export const EventAdvancedTab = ({
       darkEventTypeColor: DEFAULT_DARK_BRAND_COLOR,
     }
   );
+
+  const [isInviteGuestsChecked, setIsInviteGuestsChecked] = useState(!!eventType.guests);
 
   let verifiedSecondaryEmails = [
     {
@@ -1103,6 +1108,61 @@ export const EventAdvancedTab = ({
               checked={value}
               onCheckedChange={(e) => onChange(e)}
             />
+          )}
+        />
+      )}
+      {isTeamEvent && (
+        <Controller
+          name="guests"
+          render={({ field: { value, onChange } }) => (
+            <SettingsToggle
+              labelClassName={classNames("text-sm", customClassNames?.roundRobinReschedule?.label)}
+              toggleSwitchAtTheEnd={true}
+              switchContainerClassName={classNames(
+                "border-subtle rounded-lg border py-6 px-4 sm:px-6",
+                isInviteGuestsChecked && "rounded-b-none"
+              )}
+              noIndentation={true}
+              title={t("guests_title")}
+              description={t("guests_description")}
+              descriptionClassName={customClassNames?.guests?.description}
+              checked={isInviteGuestsChecked}
+              onCheckedChange={(checked) => {
+                setIsInviteGuestsChecked(checked);
+                if (!checked) {
+                  onChange([]); // Remove all guests when toggled off
+                }
+              }}>
+              <div className="border-subtle w-[100%] rounded-b-lg border border-t-0 p-6 lg:ml-0">
+                <CheckedTeamSelect
+                  isOptionDisabled={() => false}
+                  onChange={(options) => {
+                    onChange && onChange(options.map((option) => option.id));
+                  }}
+                  value={value.map((id) => {
+                    const teamMember = teamMembers.find((member) => member.id === id);
+                    return {
+                      id: teamMember?.id,
+                      label: `${teamMember?.name || teamMember?.email || ""}`,
+                      value: `${teamMember?.id}`,
+                      avatar: teamMember?.avatar,
+                      email: teamMember?.email,
+                    };
+                  })}
+                  controlShouldRenderValue={false}
+                  options={teamMembers.map((member) => ({
+                    id: member.id,
+                    label: `${member.name || member.email || ""}`,
+                    value: `${member.id}`,
+                    avatar: member.avatar,
+                    email: member.email,
+                  }))}
+                  placeholder={t("select")}
+                  isRRWeightsEnabled={false}
+                  customClassNames=""
+                />
+              </div>
+            </SettingsToggle>
           )}
         />
       )}

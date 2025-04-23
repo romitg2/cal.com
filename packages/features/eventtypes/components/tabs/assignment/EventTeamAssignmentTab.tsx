@@ -235,6 +235,7 @@ const FixedHosts = ({
           }}
           childrenClassName={classNames("lg:ml-0", customClassNames?.children)}>
           <div className="border-subtle flex flex-col gap-6 rounded-bl-md rounded-br-md border border-t-0 px-6">
+            <div>we are here</div>
             <AddMembersWithSwitch
               data-testid="fixed-hosts-select"
               placeholder={t("add_a_member")}

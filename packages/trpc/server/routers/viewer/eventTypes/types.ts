@@ -62,6 +62,7 @@ const BaseEventTypeUpdateInput = _EventTypeModel
     users: z.array(stringOrNumber),
     children: z.array(childSchema),
     hosts: z.array(hostSchema),
+    guests: z.array(stringOrNumber),
     schedule: z.number().nullable(),
     instantMeetingSchedule: z.number().nullable(),
     multiplePrivateLinks: z.array(z.string()),
