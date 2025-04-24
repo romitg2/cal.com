@@ -147,9 +147,6 @@ const getEventType = async ({
   eventTypeSlug?: string;
 }) => {
   // handle dynamic user
-  console.log("executing.......");
-  console.log("executing.......");
-  console.log("executing.......");
   const eventType =
     !eventTypeId && !!eventTypeSlug ? getDefaultEvent(eventTypeSlug) : await getEventTypesFromDB(eventTypeId);
 
@@ -348,15 +345,11 @@ async function handler(
   } = input;
 
   const isPlatformBooking = !!platformClientId;
-  console.log("--------- reached till here ---------");
-  console.log("--------- reached till here ---------");
 
   const eventType = await monitorCallbackAsync(getEventType, {
     eventTypeId: rawBookingData.eventTypeId,
     eventTypeSlug: rawBookingData.eventTypeSlug,
   });
-
-  console.log("-------- eventType team members data -----------", eventType);
 
   const bookingDataSchema = bookingDataSchemaGetter({
     view: rawBookingData.rescheduleUid ? "reschedule" : "booking",
@@ -907,6 +900,20 @@ async function handler(
     log.info("Removed guests from the booking", guestsRemoved);
   }
 
+  const teamGuestsPromises = eventType.guests.map(async (guest) => ({
+    email: guest.email || "",
+    name: guest.name || "",
+    firstName: "",
+    lastName: "",
+    timeZone: guest.timeZone,
+    language: {
+      translate: await getTranslation(guest.locale ?? "en", "common"),
+      locale: guest.locale ?? "en",
+    },
+  }));
+
+  const teamGuests = await Promise.all(teamGuestsPromises);
+
   const seed = `${organizerUser.username}:${dayjs(reqBody.start).utc().format()}:${new Date().getTime()}`;
   const uid = translator.fromUUID(uuidv5(seed, uuidv5.URL));
 
@@ -953,9 +960,7 @@ async function handler(
     });
   const teamMembers = await Promise.all(teamMemberPromises);
 
-  const attendeesList = [...invitee, ...guests];
-
-  console.log("attendee list: -------------", attendeesList);
+  const attendeesList = [...invitee, ...guests, ...teamGuests];
 
   const responses = reqBody.responses || null;
   const evtName = !eventType?.isDynamic ? eventType.eventName : responses?.title;
