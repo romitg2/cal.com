@@ -335,7 +335,7 @@ const BookerComponent = ({
             `${customClassNames?.bookerContainer}`
           )}>
           <AnimatePresence>
-            {!isInstantMeeting && (
+            {!isInstantMeeting && bookerState !== "booking" && (
               <BookerSection
                 area="header"
                 className={classNames(
