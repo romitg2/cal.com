@@ -21,15 +21,15 @@ import {
   deleteScheduledEmailReminder,
 } from "@calcom/features/ee/workflows/lib/reminders/emailReminderManager";
 import { scheduleWorkflowReminders } from "@calcom/features/ee/workflows/lib/reminders/reminderScheduler";
-import { isPrismaObjOrUndefined } from "@calcom/lib";
 import { getVideoCallUrlFromCalEvent } from "@calcom/lib/CalEventParser";
 import { SENDER_NAME } from "@calcom/lib/constants";
 import {
   enrichHostsWithDelegationCredentials,
-  enrichUserWithDelegationCredentialsWithoutOrgId,
+  enrichUserWithDelegationCredentialsIncludeServiceAccountKey,
 } from "@calcom/lib/delegationCredential/server";
 import { getEventName } from "@calcom/lib/event";
 import { getBookerBaseUrl } from "@calcom/lib/getBookerUrl/server";
+import { isPrismaObjOrUndefined } from "@calcom/lib/isPrismaObj";
 import logger from "@calcom/lib/logger";
 import { getLuckyUser } from "@calcom/lib/server/getLuckyUser";
 import { getTranslation } from "@calcom/lib/server/i18n";
@@ -233,7 +233,7 @@ export const roundRobinReassignment = async ({
       host: organizer.name || "Nameless",
       location: bookingLocation || "integrations:daily",
       bookingFields: { ...responses },
-      eventDuration: eventType.length,
+      eventDuration: dayjs(booking.endTime).diff(booking.startTime, "minutes"),
       t: organizerT,
     };
 
@@ -245,6 +245,7 @@ export const roundRobinReassignment = async ({
       },
       data: {
         userId: reassignedRRHost.id,
+        userPrimaryEmail: reassignedRRHost.email,
         title: newBookingTitle,
       },
       select: bookingSelect,
@@ -319,6 +320,8 @@ export const roundRobinReassignment = async ({
       bookingFields: eventType?.bookingFields ?? null,
       booking,
     }),
+    hideOrganizerEmail: eventType.hideOrganizerEmail,
+    customReplyToEmail: eventType?.customReplyToEmail,
     location: bookingLocation,
     ...(platformClientParams ? platformClientParams : {}),
   };
@@ -336,7 +339,7 @@ export const roundRobinReassignment = async ({
     },
   });
 
-  const organizerWithCredentials = await enrichUserWithDelegationCredentialsWithoutOrgId({
+  const organizerWithCredentials = await enrichUserWithDelegationCredentialsIncludeServiceAccountKey({
     user: { ...organizer, credentials },
   });
 
@@ -459,6 +462,8 @@ export const roundRobinReassignment = async ({
             template: true,
             workflow: {
               select: {
+                userId: true,
+                teamId: true,
                 trigger: true,
                 time: true,
                 timeUnit: true,
@@ -505,6 +510,8 @@ export const roundRobinReassignment = async ({
           includeCalendarEvent: workflowStep.includeCalendarEvent,
           workflowStepId: workflowStep.id,
           verifiedAt: workflowStep.verifiedAt,
+          userId: workflow.userId,
+          teamId: workflow.teamId,
         });
       }
 
