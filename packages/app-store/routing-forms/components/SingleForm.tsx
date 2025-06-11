@@ -172,7 +172,6 @@ function SingleForm({ form, appUrl, Page, enrichedWithUserProfileForm }: SingleF
               ) : (
                 <div className="mx-auto w-full max-w-4xl px-2">
                   <Page hookForm={hookForm} form={form} appUrl={appUrl} />
-
                 </div>
               )}
               <AnimatePresence>
