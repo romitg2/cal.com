@@ -49,23 +49,35 @@ enum CreationSource {
 }
 
 model Host {
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId           Int
-  eventType        EventType @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
-  eventTypeId      Int
-  isFixed          Boolean   @default(false)
-  priority         Int?
-  weight           Int?
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            Int
+  eventType         EventType        @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  eventTypeId       Int
+  isFixed           Boolean          @default(false)
+  priority          Int?
+  weight            Int?
   // weightAdjustment is deprecated. We not calculate the calibratino value on the spot. Plan to drop this column.
-  weightAdjustment Int?
-  schedule         Schedule? @relation(fields: [scheduleId], references: [id])
-  scheduleId       Int?
-  createdAt        DateTime  @default(now())
+  weightAdjustment  Int?
+  schedule          Schedule?        @relation(fields: [scheduleId], references: [id])
+  scheduleId        Int?
+  createdAt         DateTime         @default(now())
+  roundRobinGroupId String?
+  roundRobinGroup   RoundRobinGroup? @relation(fields: [roundRobinGroupId], references: [id], onDelete: Cascade)
 
   @@id([userId, eventTypeId])
   @@index([userId])
   @@index([eventTypeId])
   @@index([scheduleId])
+}
+
+model RoundRobinGroup {
+  id          String    @id @default(uuid())
+  name        String?
+  eventType   EventType @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  eventTypeId Int
+  Host        Host[]
+
+  @@index([eventTypeId])
 }
 
 model CalVideoSettings {
@@ -203,9 +215,10 @@ model EventType {
   secondaryEmailId Int?
   secondaryEmail   SecondaryEmail? @relation(fields: [secondaryEmailId], references: [id], onDelete: Cascade)
 
-  useBookerTimezone     Boolean   @default(false)
+  useBookerTimezone     Boolean           @default(false)
   restrictionScheduleId Int?
-  restrictionSchedule   Schedule? @relation("restrictionSchedule", fields: [restrictionScheduleId], references: [id])
+  restrictionSchedule   Schedule?         @relation("restrictionSchedule", fields: [restrictionScheduleId], references: [id])
+  RoundRobinGroup       RoundRobinGroup[]
 
   @@unique([userId, slug])
   @@unique([teamId, slug])

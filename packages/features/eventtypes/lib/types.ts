@@ -30,6 +30,7 @@ export type Host = {
   priority: number;
   weight: number;
   scheduleId?: number | null;
+  roundRobinGroupId?: string;
 };
 export type TeamMember = {
   value: string;
@@ -138,6 +139,10 @@ export type FormValues = {
   onlyShowFirstAvailableSlot: boolean;
   children: ChildrenEventType[];
   hosts: Host[];
+  roundRobinHostsGroups: {
+    id: string;
+    hosts: Host[];
+  }[];
   bookingFields: z.infer<typeof eventTypeBookingFields>;
   availability?: AvailabilityOption;
   bookerLayouts: BookerLayoutSettings;
