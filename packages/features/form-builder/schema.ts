@@ -157,6 +157,7 @@ export const fieldTypeConfigSchema = z
     isTextType: z.boolean().default(false).optional(),
     systemOnly: z.boolean().default(false).optional(),
     needsOptions: z.boolean().default(false).optional(),
+    supportsPricing: z.boolean().default(false).optional(),
     supportsLengthCheck: z
       .object({
         maxLength: z.number(),

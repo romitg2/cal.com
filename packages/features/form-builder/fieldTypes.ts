@@ -99,6 +99,7 @@ const configMap: Record<FieldType, Omit<z.infer<typeof fieldTypeConfigSchema>, "
     label: "Number",
     value: "number",
     isTextType: true,
+    supportsPricing: true,
   },
   textarea: {
     label: "Long Text",
@@ -114,12 +115,14 @@ const configMap: Record<FieldType, Omit<z.infer<typeof fieldTypeConfigSchema>, "
     value: "select",
     needsOptions: true,
     isTextType: true,
+    supportsPricing: true,
   },
   multiselect: {
     label: "MultiSelect",
     value: "multiselect",
     needsOptions: true,
     isTextType: false,
+    supportsPricing: true,
   },
   multiemail: {
     label: "Multiple Emails",
@@ -140,6 +143,7 @@ const configMap: Record<FieldType, Omit<z.infer<typeof fieldTypeConfigSchema>, "
     value: "checkbox",
     needsOptions: true,
     isTextType: false,
+    supportsPricing: true,
   },
   radio: {
     label: "Radio Group",
