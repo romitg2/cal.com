@@ -192,6 +192,7 @@ model EventType {
   hideOrganizerEmail                       Boolean                   @default(false)
   maxActiveBookingsPerBooker               Int?
   maxActiveBookingPerBookerOfferReschedule Boolean                   @default(false)
+  allowReassignmentForManagedEvent         Boolean                   @default(false)
   /// @zod.custom(imports.emailSchema)
   customReplyToEmail                       String?
   calVideoSettings                         CalVideoSettings?
