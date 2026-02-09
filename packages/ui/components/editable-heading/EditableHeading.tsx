@@ -22,7 +22,7 @@ export const EditableHeading = function EditableHeading({
   return (
     <div className="group pointer-events-auto relative truncate" onClick={enableEditing}>
       <div className={classNames(!disabled && "cursor-pointer", "flex items-center")}>
-        <label className="min-w-8 relative inline-block">
+        <label className="min-w-8 min-h-7 relative inline-flex items-center">
           <span
             className={classNames(
               "whitespace-pre text-xl tracking-normal w-full truncate cursor-pointer",
