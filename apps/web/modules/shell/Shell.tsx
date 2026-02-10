@@ -42,13 +42,18 @@ const Layout = (props: LayoutProps) => {
       <DynamicModals />
 
       <div className="flex min-h-screen flex-col">
-        {banners && !props.isPlatformUser && <BannerContainer banners={banners} />}
+        {banners && !props.isPlatformUser && (
+          <BannerContainer banners={banners} />
+        )}
 
         <div className="flex flex-1" data-testid="dashboard-shell">
           {props.SidebarContainer ? (
             cloneElement(props.SidebarContainer, { bannersHeight })
           ) : (
-            <SideBarContainer isPlatformUser={props.isPlatformUser} bannersHeight={bannersHeight} />
+            <SideBarContainer
+              isPlatformUser={props.isPlatformUser}
+              bannersHeight={bannersHeight}
+            />
           )}
           <div className="flex w-0 flex-1 flex-col">
             <MainContainer {...props} />
@@ -59,7 +64,10 @@ const Layout = (props: LayoutProps) => {
   );
 };
 
-type DrawerState = [isOpen: boolean, setDrawerOpen: Dispatch<SetStateAction<boolean>>];
+type DrawerState = [
+  isOpen: boolean,
+  setDrawerOpen: Dispatch<SetStateAction<boolean>>
+];
 
 export type LayoutProps = {
   centered?: boolean;
@@ -90,7 +98,13 @@ export type LayoutProps = {
   disableSticky?: boolean;
 };
 
-const KBarWrapper = ({ children, withKBar = false }: { withKBar: boolean; children: React.ReactNode }) =>
+const KBarWrapper = ({
+  children,
+  withKBar = false,
+}: {
+  withKBar: boolean;
+  children: React.ReactNode;
+}) =>
   withKBar ? (
     <KBarRoot>
       {children}
@@ -150,7 +164,9 @@ export function ShellMain(props: LayoutProps) {
               size="sm"
               color="minimal"
               onClick={() =>
-                typeof props.backPath === "string" ? router.push(props.backPath as string) : router.back()
+                typeof props.backPath === "string"
+                  ? router.push(props.backPath as string)
+                  : router.back()
               }
               StartIcon="arrow-left"
               aria-label="Go Back"
@@ -163,19 +179,35 @@ export function ShellMain(props: LayoutProps) {
               className={classNames(props.large && "py-8", "flex w-full max-w-full items-start truncate")}>
               {props.HeadingLeftIcon && <div className="ltr:mr-4">{props.HeadingLeftIcon}</div>}
               <div
-                className={classNames("w-full truncate ltr:mr-4 rtl:ml-4 md:block", props.headerClassName)}>
+                className={classNames(
+                  "w-full truncate ltr:mr-4 rtl:ml-4 md:block",
+                  props.headerClassName
+                )}
+              >
                 {props.heading && (
                   <h3
                     className={classNames(
                       "font-cal text-emphasis max-w-28 sm:max-w-72 md:max-w-80 hidden truncate text-lg font-semibold tracking-wide sm:text-xl md:block xl:max-w-full",
                       props.smallHeading ? "text-base" : "text-xl"
-                    )}>
-                    {!isLocaleReady ? <SkeletonText invisible /> : props.heading}
+                    )}
+                  >
+                    {!isLocaleReady ? (
+                      <SkeletonText invisible />
+                    ) : (
+                      props.heading
+                    )}
                   </h3>
                 )}
                 {props.subtitle && (
-                  <p className="text-default hidden text-sm md:block" data-testid="subtitle">
-                    {!isLocaleReady ? <SkeletonText invisible /> : props.subtitle}
+                  <p
+                    className="text-default hidden text-sm md:block"
+                    data-testid="subtitle"
+                  >
+                    {!isLocaleReady ? (
+                      <SkeletonText invisible />
+                    ) : (
+                      props.subtitle
+                    )}
                   </p>
                 )}
               </div>
@@ -187,7 +219,8 @@ export function ShellMain(props: LayoutProps) {
                       ? "relative"
                       : "pwa:bottom-[max(7rem,_calc(5rem_+_env(safe-area-inset-bottom)))] fixed bottom-20 z-40 ltr:right-4 rtl:left-4 md:z-auto md:ltr:right-0 md:rtl:left-0",
                     "shrink-0 [-webkit-app-region:no-drag] md:relative md:bottom-auto md:right-auto"
-                  )}>
+                  )}
+                >
                   {isLocaleReady && props.CTA}
                 </div>
               )}
@@ -197,7 +230,11 @@ export function ShellMain(props: LayoutProps) {
         </div>
       )}
       {props.afterHeading && <>{props.afterHeading}</>}
-      <div className={classNames(props.flexChildrenContainer && "flex flex-1 flex-col")}>
+      <div
+        className={classNames(
+          props.flexChildrenContainer && "flex flex-1 flex-col"
+        )}
+      >
         {props.children}
       </div>
     </>
@@ -218,7 +255,11 @@ function MainContainer({
       {TopNavContainerProp}
       <div className="max-w-full p-2 sm:py-4 lg:px-6">
         <ErrorBoundary>
-          {!props.withoutMain ? <ShellMain {...props}>{props.children}</ShellMain> : props.children}
+          {!props.withoutMain ? (
+            <ShellMain {...props}>{props.children}</ShellMain>
+          ) : (
+            props.children
+          )}
         </ErrorBoundary>
         {/* show bottom navigation for md and smaller (tablet and phones) on pages where back button doesn't exist */}
         {!props.backPath ? MobileNavigationContainerProp : null}
