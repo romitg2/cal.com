@@ -1,6 +1,7 @@
 "use client";
 
-import { useDataTable, useFilterValue, ZSingleSelectFilterValue } from "@calcom/features/data-table";
+import { ZSingleSelectFilterValue } from "@calcom/features/data-table";
+import { useDataTable, useFilterValue } from "@calcom/web/modules/data-table/hooks";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { WrongAssignmentReportStatus } from "@calcom/prisma/enums";
 import { trpc } from "@calcom/trpc/react";
