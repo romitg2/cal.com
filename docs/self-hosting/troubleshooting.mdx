@@ -106,19 +106,37 @@ request to http://<your-domain>/api/auth/session failed, reason: getaddrinfo ENO
 
 **Cause:** The Docker container cannot resolve the external hostname set in `NEXTAUTH_URL` from within the container's network.
 
-**Solution:** Add your domain to the container's `/etc/hosts` so it resolves to itself:
+**Solution:** This issue occurs because the container tries to reach its own public hostname but cannot resolve it internally. The fix depends on your setup:
+
+**Option 1: Use `host-gateway` to reach reverse proxy on host (recommended)**
+
+If your reverse proxy (nginx/traefik) handles HTTPS on the host machine, use Docker's `host-gateway`:
 
 ```yaml
 # docker-compose.yml
 services:
   calcom:
     extra_hosts:
-      - "cal.yourdomain.com:127.0.0.1"
+      - "cal.yourdomain.com:host-gateway"
 ```
 
-This allows the container to resolve your public domain internally while keeping `NEXTAUTH_URL` set to your public URL (required for OAuth callbacks to work).
+`host-gateway` (Docker 20.10+) resolves to the host machine's internal IP, allowing the container to reach your reverse proxy which then handles the HTTPS connection.
 
-> **Why not use `localhost`?** Setting `NEXTAUTH_URL` to `localhost` would fix this DNS error, but **breaks OAuth** — external providers like Google would redirect to `localhost` instead of your domain.
+**Option 2: Configure reverse proxy headers**
+
+Ensure your reverse proxy forwards the correct headers so NextAuth can detect the protocol:
+
+```nginx
+# nginx.conf
+proxy_set_header Host $host;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-Host $host;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+```
+
+> **⚠️ Do not use `127.0.0.1`** — If `NEXTAUTH_URL` uses HTTPS, the container will try to connect to `127.0.0.1:443`, but Cal.com listens on port 3000. This causes connection failures.
+
+> **Why not use `localhost` in NEXTAUTH_URL?** Setting `NEXTAUTH_URL` to `http://localhost:3000` would fix this DNS error, but **breaks OAuth** — external providers like Google would redirect to `localhost` instead of your domain.
 
 ---
 
