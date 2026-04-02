@@ -1,10 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-
-import type { PrismaClient } from "@calcom/prisma";
-import { WebhookTriggerEvents } from "@calcom/prisma/enums";
-
 import type { IEventTypesRepository } from "@calcom/features/eventtypes/eventtypes.repository.interface";
 import type { IUsersRepository } from "@calcom/features/users/users.repository.interface";
+import type { PrismaClient } from "@calcom/prisma";
+import { WebhookTriggerEvents } from "@calcom/prisma/enums";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WebhookVersion } from "../interface/IWebhookRepository";
 import { WebhookRepository } from "./WebhookRepository";
 
@@ -14,7 +12,15 @@ vi.mock("@calcom/prisma", () => ({
 }));
 
 describe("WebhookRepository", () => {
-  let mockPrisma: { $queryRaw: ReturnType<typeof vi.fn> };
+  let mockPrisma: {
+    $queryRaw: ReturnType<typeof vi.fn>;
+    webhookScheduledTriggers: {
+      create: ReturnType<typeof vi.fn>;
+      deleteMany: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
+      findMany: ReturnType<typeof vi.fn>;
+    };
+  };
   let mockEventTypeRepo: { findParentEventTypeId: ReturnType<typeof vi.fn> };
   let mockUserRepo: Record<string, ReturnType<typeof vi.fn>>;
   let repository: WebhookRepository;
@@ -22,6 +28,12 @@ describe("WebhookRepository", () => {
   beforeEach(() => {
     mockPrisma = {
       $queryRaw: vi.fn(),
+      webhookScheduledTriggers: {
+        create: vi.fn(),
+        deleteMany: vi.fn(),
+        delete: vi.fn(),
+        findMany: vi.fn(),
+      },
     };
     mockEventTypeRepo = {
       findParentEventTypeId: vi.fn().mockResolvedValue(null),
@@ -120,6 +132,167 @@ describe("WebhookRepository", () => {
       expect(result).toHaveLength(2);
       expect(result[0].version).toBe(WebhookVersion.V_2021_10_20);
       expect(result[1].version).toBe(WebhookVersion.V_2021_10_20);
+    });
+  });
+
+  describe("createScheduledTrigger", () => {
+    it("should create a scheduled trigger with the correct data", async () => {
+      mockPrisma.webhookScheduledTriggers.create.mockResolvedValue({});
+
+      await repository.createScheduledTrigger({
+        payload: '{"triggerEvent":"BOOKING_CREATED"}',
+        appId: "test-app",
+        startAfter: new Date("2025-01-01"),
+        subscriberUrl: "https://example.com/webhook",
+        webhookId: "webhook-123",
+        bookingId: 456,
+      });
+
+      expect(mockPrisma.webhookScheduledTriggers.create).toHaveBeenCalledWith({
+        data: {
+          payload: '{"triggerEvent":"BOOKING_CREATED"}',
+          appId: "test-app",
+          startAfter: new Date("2025-01-01"),
+          subscriberUrl: "https://example.com/webhook",
+          webhook: { connect: { id: "webhook-123" } },
+          booking: { connect: { id: 456 } },
+        },
+      });
+    });
+  });
+
+  describe("deleteOldScheduledTriggers", () => {
+    it("should delete triggers older than the specified date", async () => {
+      mockPrisma.webhookScheduledTriggers.deleteMany.mockResolvedValue({ count: 5 });
+      const olderThan = new Date("2025-01-01");
+
+      const result = await repository.deleteOldScheduledTriggers(olderThan);
+
+      expect(mockPrisma.webhookScheduledTriggers.deleteMany).toHaveBeenCalledWith({
+        where: { startAfter: { lte: olderThan } },
+      });
+      expect(result.count).toBe(5);
+    });
+  });
+
+  describe("deleteScheduledTriggersByBookingId", () => {
+    it("should delete triggers by booking id", async () => {
+      mockPrisma.webhookScheduledTriggers.deleteMany.mockResolvedValue({ count: 2 });
+
+      const result = await repository.deleteScheduledTriggersByBookingId(123);
+
+      expect(mockPrisma.webhookScheduledTriggers.deleteMany).toHaveBeenCalledWith({
+        where: { bookingId: 123 },
+      });
+      expect(result.count).toBe(2);
+    });
+  });
+
+  describe("deleteScheduledTriggersByWebhookId", () => {
+    it("should delete triggers by webhook id without trigger event filter", async () => {
+      mockPrisma.webhookScheduledTriggers.deleteMany.mockResolvedValue({ count: 3 });
+
+      const result = await repository.deleteScheduledTriggersByWebhookId("webhook-123");
+
+      expect(mockPrisma.webhookScheduledTriggers.deleteMany).toHaveBeenCalledWith({
+        where: { webhookId: "webhook-123" },
+      });
+      expect(result.count).toBe(3);
+    });
+
+    it("should delete triggers by webhook id with trigger event filter", async () => {
+      mockPrisma.webhookScheduledTriggers.deleteMany.mockResolvedValue({ count: 1 });
+
+      const result = await repository.deleteScheduledTriggersByWebhookId(
+        "webhook-123",
+        WebhookTriggerEvents.BOOKING_CREATED
+      );
+
+      expect(mockPrisma.webhookScheduledTriggers.deleteMany).toHaveBeenCalledWith({
+        where: {
+          webhookId: "webhook-123",
+          payload: { contains: '"triggerEvent":"BOOKING_CREATED"' },
+        },
+      });
+      expect(result.count).toBe(1);
+    });
+  });
+
+  describe("deleteScheduledTriggersByAppIdAndOwner", () => {
+    it("should delete triggers by app id and user id", async () => {
+      mockPrisma.webhookScheduledTriggers.deleteMany.mockResolvedValue({ count: 4 });
+
+      const result = await repository.deleteScheduledTriggersByAppIdAndOwner({
+        appId: "test-app",
+        userId: 123,
+      });
+
+      expect(mockPrisma.webhookScheduledTriggers.deleteMany).toHaveBeenCalledWith({
+        where: {
+          appId: "test-app",
+          booking: { eventType: { userId: 123 } },
+        },
+      });
+      expect(result.count).toBe(4);
+    });
+
+    it("should delete triggers by app id and team id", async () => {
+      mockPrisma.webhookScheduledTriggers.deleteMany.mockResolvedValue({ count: 2 });
+
+      const result = await repository.deleteScheduledTriggersByAppIdAndOwner({
+        appId: "test-app",
+        teamId: 456,
+      });
+
+      expect(mockPrisma.webhookScheduledTriggers.deleteMany).toHaveBeenCalledWith({
+        where: {
+          appId: "test-app",
+          booking: { eventType: { teamId: 456 } },
+        },
+      });
+      expect(result.count).toBe(2);
+    });
+  });
+
+  describe("deleteScheduledTriggerById", () => {
+    it("should delete a single trigger by id", async () => {
+      mockPrisma.webhookScheduledTriggers.delete.mockResolvedValue({});
+
+      await repository.deleteScheduledTriggerById(123);
+
+      expect(mockPrisma.webhookScheduledTriggers.delete).toHaveBeenCalledWith({
+        where: { id: 123 },
+      });
+    });
+  });
+
+  describe("findScheduledTriggersReadyToRun", () => {
+    it("should find triggers ready to run before specified date", async () => {
+      const mockTriggers = [
+        {
+          id: 1,
+          jobName: "job-1",
+          payload: '{"triggerEvent":"BOOKING_CREATED"}',
+          subscriberUrl: "https://example.com/webhook",
+          webhook: { secret: "test-secret", version: "2021-10-20" },
+        },
+      ];
+      mockPrisma.webhookScheduledTriggers.findMany.mockResolvedValue(mockTriggers);
+      const beforeDate = new Date("2025-01-01");
+
+      const result = await repository.findScheduledTriggersReadyToRun(beforeDate);
+
+      expect(mockPrisma.webhookScheduledTriggers.findMany).toHaveBeenCalledWith({
+        where: { startAfter: { lte: beforeDate } },
+        select: {
+          id: true,
+          jobName: true,
+          payload: true,
+          subscriberUrl: true,
+          webhook: { select: { secret: true, version: true } },
+        },
+      });
+      expect(result).toEqual(mockTriggers);
     });
   });
 });

@@ -15,6 +15,8 @@ import { WebhookOutputMapper } from "../infrastructure/mappers/WebhookOutputMapp
 import type {
   IWebhookRepository,
   ListWebhooksOptions,
+  ScheduledTriggerCreateInput,
+  ScheduledTriggerForExecution,
   WebhookVersion,
 } from "../interface/IWebhookRepository";
 import { parseWebhookVersion } from "../interface/IWebhookRepository";
@@ -576,6 +578,113 @@ export class WebhookRepository implements IWebhookRepository {
       where: { id: webhookId },
       data: { active: false },
       select: { id: true },
+    });
+  }
+
+  // WebhookScheduledTriggers methods
+
+  async createScheduledTrigger(data: ScheduledTriggerCreateInput): Promise<void> {
+    await this.prisma.webhookScheduledTriggers.create({
+      data: {
+        payload: data.payload,
+        appId: data.appId,
+        startAfter: data.startAfter,
+        subscriberUrl: data.subscriberUrl,
+        webhook: {
+          connect: {
+            id: data.webhookId,
+          },
+        },
+        booking: {
+          connect: {
+            id: data.bookingId,
+          },
+        },
+      },
+    });
+  }
+
+  async deleteOldScheduledTriggers(olderThan: Date): Promise<{ count: number }> {
+    return await this.prisma.webhookScheduledTriggers.deleteMany({
+      where: {
+        startAfter: {
+          lte: olderThan,
+        },
+      },
+    });
+  }
+
+  async deleteScheduledTriggersByBookingId(bookingId: number): Promise<{ count: number }> {
+    return await this.prisma.webhookScheduledTriggers.deleteMany({
+      where: {
+        bookingId,
+      },
+    });
+  }
+
+  async deleteScheduledTriggersByWebhookId(
+    webhookId: string,
+    triggerEvent?: WebhookTriggerEvents
+  ): Promise<{ count: number }> {
+    const where: Prisma.WebhookScheduledTriggersWhereInput = { webhookId };
+
+    if (triggerEvent) {
+      const shouldContain = `"triggerEvent":"${triggerEvent}"`;
+      where.payload = { contains: shouldContain };
+    }
+
+    return await this.prisma.webhookScheduledTriggers.deleteMany({
+      where,
+    });
+  }
+
+  async deleteScheduledTriggersByAppIdAndOwner(options: {
+    appId: string;
+    userId?: number;
+    teamId?: number;
+  }): Promise<{ count: number }> {
+    const bookingWhere: Prisma.BookingWhereInput = {};
+    if (options.userId) {
+      bookingWhere.eventType = { userId: options.userId };
+    } else if (options.teamId) {
+      bookingWhere.eventType = { teamId: options.teamId };
+    }
+
+    return await this.prisma.webhookScheduledTriggers.deleteMany({
+      where: {
+        appId: options.appId,
+        booking: bookingWhere,
+      },
+    });
+  }
+
+  async deleteScheduledTriggerById(id: number): Promise<void> {
+    await this.prisma.webhookScheduledTriggers.delete({
+      where: {
+        id,
+      },
+    });
+  }
+
+  async findScheduledTriggersReadyToRun(beforeDate: Date): Promise<ScheduledTriggerForExecution[]> {
+    return await this.prisma.webhookScheduledTriggers.findMany({
+      where: {
+        startAfter: {
+          lte: beforeDate,
+        },
+      },
+      select: {
+        id: true,
+        jobName: true,
+        payload: true,
+        subscriberUrl: true,
+        webhook: {
+          select: {
+            secret: true,
+            version: true,
+          },
+        },
+      },
     });
   }
 }

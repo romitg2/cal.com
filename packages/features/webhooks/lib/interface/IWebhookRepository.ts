@@ -53,6 +53,26 @@ export interface ListWebhooksOptions {
   eventTriggers?: WebhookTriggerEvents[];
 }
 
+export interface ScheduledTriggerCreateInput {
+  payload: string;
+  appId: string | null;
+  startAfter: Date;
+  subscriberUrl: string;
+  webhookId: string;
+  bookingId: number;
+}
+
+export interface ScheduledTriggerForExecution {
+  id: number;
+  jobName: string | null;
+  payload: string | null;
+  subscriberUrl: string;
+  webhook: {
+    secret: string | null;
+    version: string;
+  } | null;
+}
+
 export interface IWebhookRepository {
   getSubscribers(options: GetSubscribersOptions): Promise<WebhookSubscriber[]>;
   getWebhookById(id: string): Promise<WebhookSubscriber | null>;
@@ -87,4 +107,20 @@ export interface IWebhookRepository {
   }>;
   listWebhooks(options: ListWebhooksOptions): Promise<Webhook[]>;
   deactivateWebhook(webhookId: string): Promise<void>;
+
+  // WebhookScheduledTriggers methods
+  createScheduledTrigger(data: ScheduledTriggerCreateInput): Promise<void>;
+  deleteOldScheduledTriggers(olderThan: Date): Promise<{ count: number }>;
+  deleteScheduledTriggersByBookingId(bookingId: number): Promise<{ count: number }>;
+  deleteScheduledTriggersByWebhookId(
+    webhookId: string,
+    triggerEvent?: WebhookTriggerEvents
+  ): Promise<{ count: number }>;
+  deleteScheduledTriggersByAppIdAndOwner(options: {
+    appId: string;
+    userId?: number;
+    teamId?: number;
+  }): Promise<{ count: number }>;
+  deleteScheduledTriggerById(id: number): Promise<void>;
+  findScheduledTriggersReadyToRun(beforeDate: Date): Promise<ScheduledTriggerForExecution[]>;
 }
