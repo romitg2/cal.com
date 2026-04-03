@@ -1151,15 +1151,14 @@ async function main() {
   });
 
   const clientId = process.env.SEED_OAUTH2_CLIENT_ID;
-  const clientSecret = process.env.SEED_OAUTH2_CLIENT_SECRET_HASHED;
+  const clientHashedSecret = process.env.SEED_OAUTH2_CLIENT_SECRET_HASHED;
 
-  if (clientId && clientSecret) {
+  if (clientId && clientHashedSecret) {
     await createOAuthClientForUser(admin.id, {
       clientId,
-      clientSecret,
+      hashedSecret: clientHashedSecret,
       name: "atoms examples app oauth 2 client",
       purpose: "test atoms examples app with oauth 2",
-      redirectUri: "http://localhost:4321",
       redirectUris: ["http://localhost:4321"],
       websiteUrl: "http://localhost:4321",
       enablePkce: false,

@@ -18,7 +18,6 @@ import jwt from "jsonwebtoken";
 
 export interface OAuth2Client {
   clientId: string;
-  redirectUri: string;
   redirectUris: string[];
   name: string;
   logo: string | null;
@@ -89,7 +88,6 @@ export class OAuthService {
 
     return {
       clientId: client.clientId,
-      redirectUri: client.redirectUri,
       redirectUris: client.redirectUris,
       name: client.name,
       logo: client.logo,
@@ -130,7 +128,6 @@ export class OAuthService {
 
     return {
       clientId: client.clientId,
-      redirectUri: client.redirectUri,
       redirectUris: client.redirectUris,
       name: client.name,
       logo: client.logo,
@@ -222,7 +219,6 @@ export class OAuthService {
       authorizationCode,
       client: {
         clientId: client.clientId,
-        redirectUri: client.redirectUri,
         redirectUris: client.redirectUris,
         name: client.name,
         logo: client.logo,
@@ -485,7 +481,6 @@ export class OAuthService {
   private validateClientSecret(
     client: {
       clientType: string;
-      clientSecret?: string | null;
       clientSecrets: { hashedSecret: string }[];
     },
     plainClientSecret?: string
@@ -495,14 +490,7 @@ export class OAuthService {
 
       const hashedInput = hashSecretKey(plainClientSecret);
 
-      if (client.clientSecrets.length > 0) {
-        return client.clientSecrets.some((s) => s.hashedSecret === hashedInput);
-      }
-
-      // note(Lauris): this is a legacy fallback: after the migration all existing clients will have at least one
-      // entry in clientSecrets, so this branch is effectively dead code post-migration.
-      // Safe to remove once the migration has been verified in production.
-      return client.clientSecret === hashedInput;
+      return client.clientSecrets.some((s) => s.hashedSecret === hashedInput);
     }
     return true;
   }

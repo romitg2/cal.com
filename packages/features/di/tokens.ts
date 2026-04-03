@@ -1,14 +1,17 @@
 import { ABUSE_RULES_DI_TOKENS } from "@calcom/features/abuse-rules/di/tokens";
 import { ABUSE_SCORING_TASKER_DI_TOKENS } from "@calcom/features/abuse-scoring/di/tasker/tokens";
+import { CUSTOM_DOMAIN_DI_TOKENS } from "@calcom/features/custom-domains/di/tokens";
 import { ABUSE_SCORING_DI_TOKENS } from "@calcom/features/abuse-scoring/di/tokens";
 import { AUDIT_DI_TOKENS } from "@calcom/features/audit/di/tokens";
 import { AUTH_DI_TOKENS } from "@calcom/features/auth/di/tokens";
+import { AVAILABILITY_DI_TOKENS } from "@calcom/features/availability/di/tokens";
 import { AVATAR_DI_TOKENS } from "@calcom/features/avatars/di/tokens";
 import { BOOKING_AUDIT_DI_TOKENS } from "@calcom/features/booking-audit/di/tokens";
 import { BOOKING_REPORT_DI_TOKENS } from "@calcom/features/bookingReport/di/tokens";
 import { BOOKING_DI_TOKENS } from "@calcom/features/bookings/di/tokens";
 import { CALENDAR_SUBSCRIPTION_DI_TOKENS } from "@calcom/features/calendar-subscription/di/tokens";
 import { CALENDARS_DI_TOKENS } from "@calcom/features/calendars/di/tokens";
+import { CRM_TASKER_DI_TOKENS } from "@calcom/features/crmManager/di/tasker/tokens";
 import { ACTIVE_USER_BILLING_DI_TOKENS } from "@calcom/features/ee/billing/active-user/di/tokens";
 import { ORGANIZATION_DI_TOKENS } from "@calcom/features/ee/organizations/di/tokens";
 import { EVENT_TYPE_DI_TOKENS } from "@calcom/features/eventtypes/di/tokens";
@@ -108,6 +111,7 @@ export const DI_TOKENS = {
   ...WATCHLIST_DI_TOKENS,
   ...ACTIVE_USER_BILLING_DI_TOKENS,
   ...ORGANIZATION_DI_TOKENS,
+  ...CUSTOM_DOMAIN_DI_TOKENS,
   ...ORGANIZATION_SETTINGS_DI_TOKENS,
   ...AVATAR_DI_TOKENS,
   ...TRANSLATION_DI_TOKENS,
@@ -119,7 +123,9 @@ export const DI_TOKENS = {
   ...EVENT_TYPE_DI_TOKENS,
   ...CALENDARS_DI_TOKENS,
   ...CALENDAR_SUBSCRIPTION_DI_TOKENS,
+  ...CRM_TASKER_DI_TOKENS,
   ...EXPERIMENTS_DI_TOKENS,
+  ...AVAILABILITY_DI_TOKENS,
   USER_CREATION_SERVICE: Symbol("UserCreationService"),
   USER_CREATION_SERVICE_MODULE: Symbol("UserCreationServiceModule"),
 };

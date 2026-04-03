@@ -195,11 +195,18 @@ export const meetingWebhookTaskPayloadSchema = baseWebhookTaskSchema.extend({
 
 /**
  * Payload for cancelling previously scheduled meeting webhooks.
- * Only needs booking identifiers to find and cancel pending runs.
+ * Booking identifiers are used to find and cancel pending runs.
+ * Scoping fields are used for the subscriber pre-check (skip cancel
+ * if no MEETING_STARTED/MEETING_ENDED webhooks are configured).
  */
 export const cancelDelayedWebhookPayloadSchema = z.object({
   bookingId: z.number(),
   bookingUid: z.string(),
+  eventTypeId: z.number().optional(),
+  teamId: z.number().nullable().optional(),
+  userId: z.number().optional(),
+  orgId: z.number().optional(),
+  oAuthClientId: z.string().nullable().optional(),
 });
 
 /**
@@ -224,7 +231,6 @@ export const transcriptionDownloadLinksSchema = z.object({
   transcription: z.array(z.object({ format: z.string(), link: z.string() })).optional(),
   recording: z.string().optional(),
 });
-
 
 export interface TranscriptionDownloadLinks {
   transcription?: Array<{ format: string; link: string }>;
@@ -254,6 +260,7 @@ export const cancelledSeatAttendeeSchema = z.object({
   timeZone: z.string(),
   locale: z.string().nullable(),
   phoneNumber: z.string().nullable().optional(),
+  cancellationReason: z.string().nullable().optional(),
 });
 
 export type CancelledSeatAttendee = z.infer<typeof cancelledSeatAttendeeSchema>;

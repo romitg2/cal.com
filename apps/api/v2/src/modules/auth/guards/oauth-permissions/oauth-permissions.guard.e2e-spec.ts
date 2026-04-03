@@ -1,4 +1,4 @@
-import { generateSecret } from "@calcom/platform-libraries";
+import { generateSecret } from "@calcom/platform-libraries/oauth";
 import type { Membership, Team, User } from "@calcom/prisma/client";
 import { AccessScope, MembershipRole, OAuthClientType } from "@calcom/prisma/enums";
 import type { INestApplication } from "@nestjs/common";
@@ -147,7 +147,7 @@ describe("OAuth Permissions Guard E2E", () => {
       clientId: testClientId,
       name: "Scope E2E Test Client",
       redirectUris: [testRedirectUri],
-      clientSecret: hashedSecret,
+      hashedSecret,
       clientType: OAuthClientType.CONFIDENTIAL,
       userId: user.id,
     });

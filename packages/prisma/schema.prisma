@@ -722,6 +722,8 @@ model Team {
   seatChangeLogs    SeatChangeLog[]
   monthlyProrations MonthlyProration[]
 
+  customDomain CustomDomain?
+
   @@unique([slug, parentId])
   @@index([parentId])
 }
@@ -1509,7 +1511,7 @@ model RoutingFormResponseField {
   response         App_RoutingForms_FormResponse   @relation(fields: [responseId], references: [id], map: "RoutingFormResponseField_response_fkey", onDelete: Cascade)
   denormalized     RoutingFormResponseDenormalized @relation("DenormalizedResponseToFields", fields: [responseId], references: [id], onDelete: Cascade)
 
-  @@index([responseId])
+  @@index([responseId, fieldId])
   @@index([fieldId])
   @@index([valueNumber])
   @@index([valueStringArray], type: Gin)
@@ -1576,12 +1578,12 @@ model RoutingFormResponseDenormalized {
   response                App_RoutingForms_FormResponse @relation(fields: [id], references: [id], onDelete: Cascade)
   fields                  RoutingFormResponseField[]    @relation("DenormalizedResponseToFields")
 
-  @@index([formId])
-  @@index([formTeamId])
-  @@index([formUserId])
+  @@index([formUserId, createdAt])
   @@index([formId, createdAt])
+  @@index([formTeamId, createdAt])
+  @@index([formTeamId, formId, createdAt])
   @@index([bookingId])
-  @@index([bookingUserId])
+  @@index([bookingUserId, createdAt])
   @@index([eventTypeId, eventTypeParentId])
 }
 
@@ -1984,9 +1986,7 @@ enum OAuthClientStatus {
 
 model OAuthClient {
   clientId        String            @id @unique
-  redirectUri     String
   redirectUris    String[]
-  clientSecret    String?
   clientType      OAuthClientType   @default(CONFIDENTIAL)
   name            String
   purpose         String?
@@ -3835,6 +3835,20 @@ model RoutingTrace {
 
   assignmentReasonId Int?              @unique
   assignmentReason   AssignmentReason? @relation(fields: [assignmentReasonId], references: [id], onDelete: Cascade)
+}
+
+model CustomDomain {
+  id            String   @id @default(cuid())
+  teamId        Int      @unique
+  slug          String   @unique
+  verified      Boolean  @default(false)
+  lastCheckedAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([lastCheckedAt(sort: Asc)])
 }
 
 model ExternalAvatar {

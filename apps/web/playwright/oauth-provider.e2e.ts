@@ -12,18 +12,16 @@ test.afterEach(async ({ users }) => {
 
 let client: {
   clientId: string;
-  redirectUri: string;
+  redirectUris: string[];
   orginalSecret: string;
   name: string;
-  clientSecret: string | null;
   logo: string | null;
 };
 
 let publicClient: {
   clientId: string;
-  redirectUri: string;
+  redirectUris: string[];
   name: string;
-  clientSecret: string | null;
   logo: string | null;
 };
 
@@ -47,7 +45,7 @@ test.describe("OAuth Provider", () => {
     await user.apiLogin();
 
     await page.goto(
-      `auth/oauth2/authorize?client_id=${client.clientId}&redirect_uri=${client.redirectUri}&response_type=code&scope=READ_PROFILE&state=1234`
+      `auth/oauth2/authorize?client_id=${client.clientId}&redirect_uri=${client.redirectUris[0]}&response_type=code&scope=READ_PROFILE&state=1234`
     );
     await page.getByTestId("allow-button").click();
 
@@ -66,7 +64,7 @@ test.describe("OAuth Provider", () => {
     tokenForm.append("client_id", client.clientId);
     tokenForm.append("client_secret", client.orginalSecret);
     tokenForm.append("grant_type", "authorization_code");
-    tokenForm.append("redirect_uri", client.redirectUri);
+    tokenForm.append("redirect_uri", client.redirectUris[0]);
     const tokenResponse = await fetch(`${WEBAPP_URL}/api/auth/oauth/token`, {
       body: tokenForm.toString(),
       method: "POST",
@@ -129,7 +127,7 @@ test.describe("OAuth Provider", () => {
     await user.apiLogin();
 
     await page.goto(
-      `auth/oauth2/authorize?client_id=${client.clientId}&redirect_uri=${client.redirectUri}&response_type=code&scope=READ_PROFILE&state=1234`
+      `auth/oauth2/authorize?client_id=${client.clientId}&redirect_uri=${client.redirectUris[0]}&response_type=code&scope=READ_PROFILE&state=1234`
     );
     await expect(page).toHaveURL(/auth\/oauth2\/authorize/);
 
@@ -147,7 +145,7 @@ test.describe("OAuth Provider", () => {
     await user.apiLogin();
 
     await page.goto(
-      `auth/oauth2/authorize?client_id=${client.clientId}&redirect_uri=${client.redirectUri}&response_type=code&scope=READ_PROFILE&state=1234&show_account_selector=true`
+      `auth/oauth2/authorize?client_id=${client.clientId}&redirect_uri=${client.redirectUris[0]}&response_type=code&scope=READ_PROFILE&state=1234&show_account_selector=true`
     );
 
     await page.locator("#account-select").click();
@@ -175,7 +173,7 @@ test.describe("OAuth Provider", () => {
     tokenForm.append("client_id", client.clientId);
     tokenForm.append("client_secret", client.orginalSecret);
     tokenForm.append("grant_type", "authorization_code");
-    tokenForm.append("redirect_uri", client.redirectUri);
+    tokenForm.append("redirect_uri", client.redirectUris[0]);
     const tokenResponse = await fetch(`${WEBAPP_URL}/api/auth/oauth/token`, {
       body: tokenForm.toString(),
       method: "POST",
@@ -237,7 +235,7 @@ test.describe("OAuth Provider", () => {
     const user = await users.create({ username: "test-user", name: "test user" });
 
     await page.goto(
-      `auth/oauth2/authorize?client_id=${client.clientId}&redirect_uri=${client.redirectUri}&response_type=code&scope=READ_PROFILE&state=1234`
+      `auth/oauth2/authorize?client_id=${client.clientId}&redirect_uri=${client.redirectUris[0]}&response_type=code&scope=READ_PROFILE&state=1234`
     );
 
     // check if user is redirected to login page
@@ -266,7 +264,7 @@ test.describe("OAuth Provider - PKCE (Public Clients)", () => {
 
     // Authorization request with PKCE challenge
     await page.goto(
-      `auth/oauth2/authorize?client_id=${publicClient.clientId}&redirect_uri=${publicClient.redirectUri}&response_type=code&scope=READ_PROFILE&state=1234&code_challenge=${pkce.codeChallenge}&code_challenge_method=${pkce.codeChallengeMethod}`
+      `auth/oauth2/authorize?client_id=${publicClient.clientId}&redirect_uri=${publicClient.redirectUris[0]}&response_type=code&scope=READ_PROFILE&state=1234&code_challenge=${pkce.codeChallenge}&code_challenge_method=${pkce.codeChallengeMethod}`
     );
     await page.getByTestId("allow-button").click();
 
@@ -287,7 +285,7 @@ test.describe("OAuth Provider - PKCE (Public Clients)", () => {
     tokenForm.append("code", code ?? "");
     tokenForm.append("client_id", publicClient.clientId);
     tokenForm.append("grant_type", "authorization_code");
-    tokenForm.append("redirect_uri", publicClient.redirectUri);
+    tokenForm.append("redirect_uri", publicClient.redirectUris[0]);
     tokenForm.append("code_verifier", pkce.codeVerifier);
 
     const tokenResponse = await fetch(`${WEBAPP_URL}/api/auth/oauth/token`, {
@@ -329,7 +327,7 @@ test.describe("OAuth Provider - PKCE (Public Clients)", () => {
 
     // Authorization request with PKCE challenge
     await page.goto(
-      `auth/oauth2/authorize?client_id=${publicClient.clientId}&redirect_uri=${publicClient.redirectUri}&response_type=code&scope=READ_PROFILE&state=1234&code_challenge=${pkce.codeChallenge}&code_challenge_method=${pkce.codeChallengeMethod}`
+      `auth/oauth2/authorize?client_id=${publicClient.clientId}&redirect_uri=${publicClient.redirectUris[0]}&response_type=code&scope=READ_PROFILE&state=1234&code_challenge=${pkce.codeChallenge}&code_challenge_method=${pkce.codeChallengeMethod}`
     );
     await page.getByTestId("allow-button").click();
 
@@ -350,7 +348,7 @@ test.describe("OAuth Provider - PKCE (Public Clients)", () => {
     tokenForm.append("code", code ?? "");
     tokenForm.append("client_id", publicClient.clientId);
     tokenForm.append("grant_type", "authorization_code");
-    tokenForm.append("redirect_uri", publicClient.redirectUri);
+    tokenForm.append("redirect_uri", publicClient.redirectUris[0]);
     tokenForm.append("code_verifier", wrongVerifier); // Wrong verifier!
 
     const tokenResponse = await fetch(`${WEBAPP_URL}/api/auth/oauth/token`, {
@@ -376,7 +374,7 @@ test.describe("OAuth Provider - PKCE (Public Clients)", () => {
 
     // Authorization request with PKCE challenge
     await page.goto(
-      `auth/oauth2/authorize?client_id=${publicClient.clientId}&redirect_uri=${publicClient.redirectUri}&response_type=code&scope=READ_PROFILE&state=1234&code_challenge=${pkce.codeChallenge}&code_challenge_method=${pkce.codeChallengeMethod}`
+      `auth/oauth2/authorize?client_id=${publicClient.clientId}&redirect_uri=${publicClient.redirectUris[0]}&response_type=code&scope=READ_PROFILE&state=1234&code_challenge=${pkce.codeChallenge}&code_challenge_method=${pkce.codeChallengeMethod}`
     );
     await page.getByTestId("allow-button").click();
 
@@ -397,7 +395,7 @@ test.describe("OAuth Provider - PKCE (Public Clients)", () => {
     tokenForm.append("code", code ?? "");
     tokenForm.append("client_id", publicClient.clientId);
     tokenForm.append("grant_type", "authorization_code");
-    tokenForm.append("redirect_uri", publicClient.redirectUri);
+    tokenForm.append("redirect_uri", publicClient.redirectUris[0]);
     // Missing code_verifier!
 
     const tokenResponse = await fetch(`${WEBAPP_URL}/api/auth/oauth/token`, {
@@ -420,7 +418,7 @@ test.describe("OAuth Provider - PKCE (Public Clients)", () => {
 
     // Try to authorize without PKCE challenge (should fail at authorization step)
     await page.goto(
-      `auth/oauth2/authorize?client_id=${publicClient.clientId}&redirect_uri=${publicClient.redirectUri}&response_type=code&scope=READ_PROFILE&state=1234`
+      `auth/oauth2/authorize?client_id=${publicClient.clientId}&redirect_uri=${publicClient.redirectUris[0]}&response_type=code&scope=READ_PROFILE&state=1234`
     );
 
     await page.waitForSelector('[data-testid="allow-button"]');
@@ -453,7 +451,7 @@ test.describe("OAuth Provider - PKCE (Public Clients)", () => {
 
     // Authorization request with PKCE challenge
     await page.goto(
-      `auth/oauth2/authorize?client_id=${publicClient.clientId}&redirect_uri=${publicClient.redirectUri}&response_type=code&scope=READ_PROFILE&state=1234&code_challenge=${pkce.codeChallenge}&code_challenge_method=${pkce.codeChallengeMethod}`
+      `auth/oauth2/authorize?client_id=${publicClient.clientId}&redirect_uri=${publicClient.redirectUris[0]}&response_type=code&scope=READ_PROFILE&state=1234&code_challenge=${pkce.codeChallenge}&code_challenge_method=${pkce.codeChallengeMethod}`
     );
     await page.getByTestId("allow-button").click();
 
@@ -474,7 +472,7 @@ test.describe("OAuth Provider - PKCE (Public Clients)", () => {
     tokenForm.append("code", code ?? "");
     tokenForm.append("client_id", publicClient.clientId);
     tokenForm.append("grant_type", "authorization_code");
-    tokenForm.append("redirect_uri", publicClient.redirectUri);
+    tokenForm.append("redirect_uri", publicClient.redirectUris[0]);
     tokenForm.append("code_verifier", pkce.codeVerifier);
 
     const tokenResponse = await fetch(`${WEBAPP_URL}/api/auth/oauth/token`, {
@@ -542,7 +540,7 @@ test.describe("OAuth Provider - PKCE with CONFIDENTIAL Clients (Enhanced Securit
 
     // Authorization request with PKCE challenge (even for CONFIDENTIAL client)
     await page.goto(
-      `auth/oauth2/authorize?client_id=${client.clientId}&redirect_uri=${client.redirectUri}&response_type=code&scope=READ_PROFILE&state=1234&code_challenge=${pkce.codeChallenge}&code_challenge_method=${pkce.codeChallengeMethod}`
+      `auth/oauth2/authorize?client_id=${client.clientId}&redirect_uri=${client.redirectUris[0]}&response_type=code&scope=READ_PROFILE&state=1234&code_challenge=${pkce.codeChallenge}&code_challenge_method=${pkce.codeChallengeMethod}`
     );
     await page.getByTestId("allow-button").click();
 
@@ -564,7 +562,7 @@ test.describe("OAuth Provider - PKCE with CONFIDENTIAL Clients (Enhanced Securit
     tokenForm.append("client_id", client.clientId);
     tokenForm.append("client_secret", client.orginalSecret);
     tokenForm.append("grant_type", "authorization_code");
-    tokenForm.append("redirect_uri", client.redirectUri);
+    tokenForm.append("redirect_uri", client.redirectUris[0]);
     tokenForm.append("code_verifier", pkce.codeVerifier);
 
     const tokenResponse = await fetch(`${WEBAPP_URL}/api/auth/oauth/token`, {
@@ -625,7 +623,7 @@ test.describe("OAuth Provider - PKCE with CONFIDENTIAL Clients (Enhanced Securit
 
     // Authorization WITHOUT PKCE challenge (traditional CONFIDENTIAL client flow)
     await page.goto(
-      `auth/oauth2/authorize?client_id=${client.clientId}&redirect_uri=${client.redirectUri}&response_type=code&scope=READ_PROFILE&state=1234`
+      `auth/oauth2/authorize?client_id=${client.clientId}&redirect_uri=${client.redirectUris[0]}&response_type=code&scope=READ_PROFILE&state=1234`
     );
     await page.getByTestId("allow-button").click();
 
@@ -647,7 +645,7 @@ test.describe("OAuth Provider - PKCE with CONFIDENTIAL Clients (Enhanced Securit
     tokenForm.append("client_id", client.clientId);
     tokenForm.append("client_secret", client.orginalSecret);
     tokenForm.append("grant_type", "authorization_code");
-    tokenForm.append("redirect_uri", client.redirectUri);
+    tokenForm.append("redirect_uri", client.redirectUris[0]);
 
     const tokenResponse = await fetch(`${WEBAPP_URL}/api/auth/oauth/token`, {
       body: tokenForm.toString(),
@@ -691,10 +689,9 @@ const createTestClient = async () => {
     data: {
       name: "Test Client",
       clientId,
-      clientSecret: hashedSecret,
-      redirectUri: "https://example.com",
       redirectUris: ["https://example.com"],
       clientType: "CONFIDENTIAL",
+      clientSecrets: { create: { hashedSecret, secretHint: "****" } },
     },
   });
 
@@ -708,8 +705,6 @@ const createTestPublicClient = async () => {
     data: {
       name: "Test Public Client",
       clientId,
-      clientSecret: null,
-      redirectUri: "https://example.com",
       redirectUris: ["https://example.com"],
       clientType: "PUBLIC",
     },

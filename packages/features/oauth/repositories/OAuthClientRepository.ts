@@ -15,7 +15,6 @@ export class OAuthClientRepository {
         clientId: clientId,
       },
       select: {
-        redirectUri: true,
         redirectUris: true,
         clientType: true,
         name: true,
@@ -39,7 +38,6 @@ export class OAuthClientRepository {
       select: {
         clientId: true,
         redirectUris: true,
-        clientSecret: true,
         clientType: true,
         status: true,
         userId: true,
@@ -249,7 +247,6 @@ export class OAuthClientRepository {
       data: {
         name,
         purpose,
-        redirectUri: redirectUris[0],
         redirectUris,
         clientId,
         clientType: enablePkce ? "PUBLIC" : "CONFIDENTIAL",
@@ -298,7 +295,6 @@ export class OAuthClientRepository {
       name?: string;
       purpose?: string;
       redirectUris?: string[];
-      redirectUri?: string;
       logo?: string | null;
       websiteUrl?: string | null;
       scopes?: AccessScope[];

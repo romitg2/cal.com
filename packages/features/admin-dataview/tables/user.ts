@@ -12,6 +12,8 @@ export const userTable: TableDefinition = {
   category: "core",
   defaultSort: "id",
   defaultSortDirection: "desc",
+  // Opt out of the excludeLockedUsersExtension so admins can see locked accounts
+  defaultWhere: { OR: [{ locked: true }, { locked: false }] },
   fields: [
     id(),
     uuid(),

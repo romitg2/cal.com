@@ -1,4 +1,4 @@
-import { generateSecret } from "@calcom/platform-libraries";
+import { generateSecret } from "@calcom/platform-libraries/oauth";
 import type { Membership, Team, User } from "@calcom/prisma/client";
 import { AccessScope, OAuthClientStatus, OAuthClientType } from "@calcom/prisma/enums";
 import type { INestApplication } from "@nestjs/common";
@@ -150,9 +150,8 @@ describe("OAuth2 Controller Endpoints", () => {
       oAuthClient = await oAuthClientFixture.create({
         clientId: testClientId,
         name: "Test OAuth Client",
-        redirectUri: testRedirectUri,
         redirectUris: [testRedirectUri],
-        clientSecret: hashedSecret,
+        hashedSecret,
         clientType: OAuthClientType.CONFIDENTIAL,
         userId: clientOwner.id,
       });
@@ -639,7 +638,7 @@ describe("OAuth2 Controller Endpoints", () => {
         clientId: pendingClientId,
         name: "Pending OAuth Client",
         redirectUris: [testRedirectUri],
-        clientSecret: hashedSecret,
+        hashedSecret,
         clientType: OAuthClientType.CONFIDENTIAL,
         status: OAuthClientStatus.PENDING,
         userId: owner.id,
@@ -649,7 +648,7 @@ describe("OAuth2 Controller Endpoints", () => {
         clientId: rejectedClientId,
         name: "Rejected OAuth Client",
         redirectUris: [testRedirectUri],
-        clientSecret: hashedSecret,
+        hashedSecret,
         clientType: OAuthClientType.CONFIDENTIAL,
         status: OAuthClientStatus.REJECTED,
         userId: owner.id,
@@ -860,7 +859,7 @@ describe("OAuth2 Controller Endpoints", () => {
         clientId: nullScopesClientId,
         name: "Legacy Client NULL Scopes",
         redirectUris: [testRedirectUri],
-        clientSecret: hashedSecret,
+        hashedSecret,
         clientType: OAuthClientType.CONFIDENTIAL,
       });
 
@@ -868,7 +867,7 @@ describe("OAuth2 Controller Endpoints", () => {
         clientId: emptyScopesClientId,
         name: "Legacy Client Empty Scopes",
         redirectUris: [testRedirectUri],
-        clientSecret: hashedSecret,
+        hashedSecret,
         clientType: OAuthClientType.CONFIDENTIAL,
         scopes: [],
       });
@@ -877,7 +876,7 @@ describe("OAuth2 Controller Endpoints", () => {
         clientId: readBookingClientId,
         name: "Legacy Client READ_BOOKING",
         redirectUris: [testRedirectUri],
-        clientSecret: hashedSecret,
+        hashedSecret,
         clientType: OAuthClientType.CONFIDENTIAL,
         scopes: [AccessScope.READ_BOOKING],
       });
@@ -886,7 +885,7 @@ describe("OAuth2 Controller Endpoints", () => {
         clientId: readBookingReadProfileClientId,
         name: "Legacy Client READ_BOOKING READ_PROFILE",
         redirectUris: [testRedirectUri],
-        clientSecret: hashedSecret,
+        hashedSecret,
         clientType: OAuthClientType.CONFIDENTIAL,
         scopes: [AccessScope.READ_BOOKING, AccessScope.READ_PROFILE],
       });

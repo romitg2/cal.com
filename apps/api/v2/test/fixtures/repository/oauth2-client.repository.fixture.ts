@@ -15,9 +15,8 @@ export class OAuth2ClientRepositoryFixture {
   async create(data: {
     clientId: string;
     name: string;
-    redirectUri?: string;
     redirectUris: string[];
-    clientSecret?: string;
+    hashedSecret?: string;
     clientType?: OAuthClientType;
     status?: OAuthClientStatus;
     logo?: string;
@@ -29,15 +28,16 @@ export class OAuth2ClientRepositoryFixture {
       data: {
         clientId: data.clientId,
         name: data.name,
-        redirectUri: data.redirectUri ?? "",
         redirectUris: data.redirectUris,
-        clientSecret: data.clientSecret,
         clientType: data.clientType || OAuthClientType.CONFIDENTIAL,
         status: data.status || OAuthClientStatus.APPROVED,
         logo: data.logo,
         isTrusted: data.isTrusted || false,
         ...(data.userId && { user: { connect: { id: data.userId } } }),
         ...(data.scopes !== undefined && { scopes: data.scopes }),
+        ...(data.hashedSecret && {
+          clientSecrets: { create: { hashedSecret: data.hashedSecret, secretHint: "****" } },
+        }),
       },
     });
   }
