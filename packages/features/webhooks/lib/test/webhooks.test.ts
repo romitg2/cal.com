@@ -2,12 +2,28 @@ import prismock from "@calcom/testing/lib/__mocks__/prisma";
 
 import { expectWebhookToHaveBeenCalledWith } from "@calcom/testing/lib/bookingScenario/expects";
 
-import { describe, expect, beforeEach } from "vitest";
+import { describe, expect, beforeEach, vi } from "vitest";
 
 import dayjs from "@calcom/dayjs";
 import { test } from "@calcom/testing/lib/fixtures/fixtures";
+import { WebhookRepository } from "../repository/webhook-repository";
+import { EventTypeRepository } from "@calcom/features/eventtypes/repositories/eventTypeRepository";
+import { UsersRepository } from "@calcom/features/users/users.repository";
+import type { PrismaClient } from "@calcom/prisma";
 
-import { handleWebhookScheduledTriggers } from "../handleWebhookScheduledTriggers";
+const testRepository = new WebhookRepository(
+  prismock as unknown as PrismaClient,
+  new EventTypeRepository(prismock as unknown as PrismaClient),
+  new UsersRepository()
+);
+
+vi.mock("@calcom/features/di/webhooks/containers/webhook", () => ({
+  getWebhookFeature: () => ({
+    repository: testRepository,
+  }),
+}));
+
+const { handleWebhookScheduledTriggers } = await import("../handleWebhookScheduledTriggers");
 
 describe("Cron job handler", () => {
   beforeEach(async () => {
@@ -38,7 +54,7 @@ describe("Cron job handler", () => {
       ],
     });
 
-    await handleWebhookScheduledTriggers(prismock);
+    await handleWebhookScheduledTriggers();
 
     const scheduledTriggers = await prismock.webhookScheduledTriggers.findMany();
     expect(scheduledTriggers.length).toBe(1);
@@ -63,7 +79,7 @@ describe("Cron job handler", () => {
         },
       ],
     });
-    await handleWebhookScheduledTriggers(prismock);
+    await handleWebhookScheduledTriggers();
 
     expectWebhookToHaveBeenCalledWith("https://example.com/test", { triggerEvent: "MEETING_ENDED", payload });
     expect(() =>

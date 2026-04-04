@@ -1,12 +1,11 @@
 import dayjs from "@calcom/dayjs";
 import { getWebhookFeature } from "@calcom/features/di/webhooks/containers/webhook";
 import logger from "@calcom/lib/logger";
-import type { PrismaClient } from "@calcom/prisma";
 import { prisma } from "@calcom/prisma";
 import { DEFAULT_WEBHOOK_VERSION } from "./interface/webhook-repository";
 import { createWebhookSignature, jsonParse } from "./sendPayload";
 
-export async function handleWebhookScheduledTriggers(_prisma?: PrismaClient) {
+export async function handleWebhookScheduledTriggers() {
   const repository = getWebhookFeature().repository;
 
   await repository.deleteOldScheduledTriggers(dayjs().subtract(1, "day").toDate());

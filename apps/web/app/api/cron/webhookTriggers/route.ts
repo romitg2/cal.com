@@ -3,7 +3,6 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { handleWebhookScheduledTriggers } from "@calcom/features/webhooks/lib/handleWebhookScheduledTriggers";
-import prisma from "@calcom/prisma";
 
 async function postHandler(req: NextRequest) {
   const apiKey = req.headers.get("authorization") || req.nextUrl.searchParams.get("apiKey");
@@ -12,7 +11,7 @@ async function postHandler(req: NextRequest) {
     return NextResponse.json({ message: "Not authenticated" }, { status: 401 });
   }
 
-  await handleWebhookScheduledTriggers(prisma);
+  await handleWebhookScheduledTriggers();
 
   return NextResponse.json({ ok: true });
 }

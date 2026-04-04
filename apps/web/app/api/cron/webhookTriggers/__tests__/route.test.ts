@@ -35,10 +35,6 @@ vi.mock("@calcom/features/webhooks/lib/handleWebhookScheduledTriggers", () => ({
 vi.mock("app/api/defaultResponderForAppDir", () => ({
   defaultResponderForAppDir: vi.fn((handler: (req: NextRequest) => Promise<Response>) => handler),
 }));
-vi.mock("@calcom/prisma", () => ({
-  __esModule: true,
-  default: {},
-}));
 
 async function getHandleWebhookScheduledTriggersMock() {
   const mod = await import("@calcom/features/webhooks/lib/handleWebhookScheduledTriggers");
@@ -122,7 +118,7 @@ describe("/api/cron/webhookTriggers", () => {
       const body = await response.json();
       expect(body).toEqual({ ok: true });
       const mockFn = await getHandleWebhookScheduledTriggersMock();
-      expect(mockFn).toHaveBeenCalledWith(expect.anything());
+      expect(mockFn).toHaveBeenCalledOnce();
     });
   });
 });

@@ -1,12 +1,38 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { DEFAULT_WEBHOOK_VERSION } from "./interface/webhook-repository";
-import { handleWebhookScheduledTriggers } from "./handleWebhookScheduledTriggers";
-import type { PrismaClient } from "@calcom/prisma";
+import type { IWebhookRepository } from "./interface/webhook-repository";
+
+const mockRepository: Pick<
+  IWebhookRepository,
+  "deleteOldScheduledTriggers" | "findScheduledTriggersReadyToRun" | "deleteScheduledTriggerById"
+> = {
+  deleteOldScheduledTriggers: vi.fn(),
+  findScheduledTriggersReadyToRun: vi.fn(),
+  deleteScheduledTriggerById: vi.fn(),
+};
+
+const mockPrismaWebhookFindUniqueOrThrow = vi.fn();
+
+vi.mock("@calcom/features/di/webhooks/containers/webhook", () => ({
+  getWebhookFeature: () => ({
+    repository: mockRepository,
+  }),
+}));
+
+vi.mock("@calcom/prisma", () => ({
+  prisma: {
+    webhook: {
+      findUniqueOrThrow: mockPrismaWebhookFindUniqueOrThrow,
+    },
+  },
+}));
+
+// Import after mocks are set up
+const { handleWebhookScheduledTriggers } = await import("./handleWebhookScheduledTriggers");
 
 describe("handleWebhookScheduledTriggers - X-Cal-Webhook-Version header", () => {
   const mockFetch = vi.fn();
-  const now = new Date();
 
   beforeEach(() => {
     vi.stubGlobal("fetch", mockFetch);
@@ -14,6 +40,8 @@ describe("handleWebhookScheduledTriggers - X-Cal-Webhook-Version header", () => 
       ok: true,
       status: 200,
     });
+    vi.mocked(mockRepository.deleteOldScheduledTriggers).mockResolvedValue({ count: 0 });
+    vi.mocked(mockRepository.deleteScheduledTriggerById).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -23,30 +51,20 @@ describe("handleWebhookScheduledTriggers - X-Cal-Webhook-Version header", () => 
 
   it("should include X-Cal-Webhook-Version header with webhook version from database", async () => {
     const webhookVersion = "2021-10-20";
-    const mockPrisma = {
-      webhookScheduledTriggers: {
-        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
-        findMany: vi.fn().mockResolvedValue([
-          {
-            id: 1,
-            jobName: null,
-            subscriberUrl: "https://example.com/webhook",
-            payload: JSON.stringify({ triggerEvent: "MEETING_ENDED" }),
-            startAfter: new Date(now.getTime() - 60000), // 1 minute ago
-            webhook: {
-              secret: "test-secret",
-              version: webhookVersion,
-            },
-          },
-        ]),
-        delete: vi.fn().mockResolvedValue({}),
+    vi.mocked(mockRepository.findScheduledTriggersReadyToRun).mockResolvedValue([
+      {
+        id: 1,
+        jobName: null,
+        subscriberUrl: "https://example.com/webhook",
+        payload: JSON.stringify({ triggerEvent: "MEETING_ENDED" }),
+        webhook: {
+          secret: "test-secret",
+          version: webhookVersion,
+        },
       },
-      webhook: {
-        findUniqueOrThrow: vi.fn(),
-      },
-    };
+    ]);
 
-    await handleWebhookScheduledTriggers(mockPrisma as unknown as PrismaClient);
+    await handleWebhookScheduledTriggers();
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [url, options] = mockFetch.mock.calls[0];
@@ -57,30 +75,20 @@ describe("handleWebhookScheduledTriggers - X-Cal-Webhook-Version header", () => 
   });
 
   it("should use DEFAULT_WEBHOOK_VERSION when webhook has no version", async () => {
-    const mockPrisma = {
-      webhookScheduledTriggers: {
-        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
-        findMany: vi.fn().mockResolvedValue([
-          {
-            id: 1,
-            jobName: null,
-            subscriberUrl: "https://example.com/webhook",
-            payload: JSON.stringify({ triggerEvent: "MEETING_STARTED" }),
-            startAfter: new Date(now.getTime() - 60000),
-            webhook: {
-              secret: "test-secret",
-              version: null, // No version set
-            },
-          },
-        ]),
-        delete: vi.fn().mockResolvedValue({}),
+    vi.mocked(mockRepository.findScheduledTriggersReadyToRun).mockResolvedValue([
+      {
+        id: 1,
+        jobName: null,
+        subscriberUrl: "https://example.com/webhook",
+        payload: JSON.stringify({ triggerEvent: "MEETING_STARTED" }),
+        webhook: {
+          secret: "test-secret",
+          version: null as unknown as string,
+        },
       },
-      webhook: {
-        findUniqueOrThrow: vi.fn(),
-      },
-    };
+    ]);
 
-    await handleWebhookScheduledTriggers(mockPrisma as unknown as PrismaClient);
+    await handleWebhookScheduledTriggers();
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [, options] = mockFetch.mock.calls[0];
@@ -89,27 +97,17 @@ describe("handleWebhookScheduledTriggers - X-Cal-Webhook-Version header", () => 
   });
 
   it("should use DEFAULT_WEBHOOK_VERSION when webhook relationship is null", async () => {
-    const mockPrisma = {
-      webhookScheduledTriggers: {
-        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
-        findMany: vi.fn().mockResolvedValue([
-          {
-            id: 1,
-            jobName: null,
-            subscriberUrl: "https://example.com/webhook",
-            payload: JSON.stringify({ triggerEvent: "MEETING_STARTED" }),
-            startAfter: new Date(now.getTime() - 60000),
-            webhook: null, // No webhook relationship
-          },
-        ]),
-        delete: vi.fn().mockResolvedValue({}),
+    vi.mocked(mockRepository.findScheduledTriggersReadyToRun).mockResolvedValue([
+      {
+        id: 1,
+        jobName: null,
+        subscriberUrl: "https://example.com/webhook",
+        payload: JSON.stringify({ triggerEvent: "MEETING_STARTED" }),
+        webhook: null,
       },
-      webhook: {
-        findUniqueOrThrow: vi.fn(),
-      },
-    };
+    ]);
 
-    await handleWebhookScheduledTriggers(mockPrisma as unknown as PrismaClient);
+    await handleWebhookScheduledTriggers();
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [, options] = mockFetch.mock.calls[0];
@@ -119,32 +117,24 @@ describe("handleWebhookScheduledTriggers - X-Cal-Webhook-Version header", () => 
 
   it("should fetch webhook version from database for legacy jobs using jobName", async () => {
     const webhookVersion = "2021-10-20";
-    const mockPrisma = {
-      webhookScheduledTriggers: {
-        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
-        findMany: vi.fn().mockResolvedValue([
-          {
-            id: 1,
-            jobName: "appId_webhookId123", // Legacy format
-            subscriberUrl: "https://example.com/webhook",
-            payload: JSON.stringify({ triggerEvent: "MEETING_ENDED" }),
-            startAfter: new Date(now.getTime() - 60000),
-            webhook: null, // No webhook relationship for legacy jobs
-          },
-        ]),
-        delete: vi.fn().mockResolvedValue({}),
+    vi.mocked(mockRepository.findScheduledTriggersReadyToRun).mockResolvedValue([
+      {
+        id: 1,
+        jobName: "appId_webhookId123",
+        subscriberUrl: "https://example.com/webhook",
+        payload: JSON.stringify({ triggerEvent: "MEETING_ENDED" }),
+        webhook: null,
       },
-      webhook: {
-        findUniqueOrThrow: vi.fn().mockResolvedValue({
-          secret: "fetched-secret",
-          version: webhookVersion,
-        }),
-      },
-    };
+    ]);
 
-    await handleWebhookScheduledTriggers(mockPrisma as unknown as PrismaClient);
+    mockPrismaWebhookFindUniqueOrThrow.mockResolvedValue({
+      secret: "fetched-secret",
+      version: webhookVersion,
+    });
 
-    expect(mockPrisma.webhook.findUniqueOrThrow).toHaveBeenCalledWith({
+    await handleWebhookScheduledTriggers();
+
+    expect(mockPrismaWebhookFindUniqueOrThrow).toHaveBeenCalledWith({
       where: { id: "webhookId123", appId: "appId" },
       select: { secret: true, version: true },
     });
