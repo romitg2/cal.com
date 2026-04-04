@@ -2,7 +2,7 @@ import { Prisma } from "@calcom/prisma/client";
 import { WebhookTriggerEvents } from "@calcom/prisma/enums";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WebhookDeliveryResult, WebhookSubscriber } from "../../dto/types";
-import { WebhookVersion } from "../../interface/i-webhook-repository";
+import { WebhookVersion } from "../../interface/webhook-repository";
 import { WebhookHttpError, WebhookSendError } from "../../service/WebhookService";
 import {
   attemptDelivery,

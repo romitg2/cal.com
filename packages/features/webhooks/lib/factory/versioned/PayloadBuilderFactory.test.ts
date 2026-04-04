@@ -4,7 +4,7 @@ import { WebhookTriggerEvents } from "@calcom/prisma/enums";
 import type { BookingWebhookEventDTO } from "../../dto/types";
 import { PayloadBuilderFactory, type PayloadBuilderSet } from "./PayloadBuilderFactory";
 import * as V2021_10_20 from "./v2021-10-20";
-import { WebhookVersion as WebhookVersionEnum } from "../../interface/i-webhook-repository";
+import { WebhookVersion as WebhookVersionEnum } from "../../interface/webhook-repository";
 
 describe("PayloadBuilderFactory", () => {
   let factory: PayloadBuilderFactory;

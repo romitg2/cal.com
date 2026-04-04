@@ -2,7 +2,7 @@
 
 import SectionBottomActions from "@calcom/features/settings/SectionBottomActions";
 import customTemplate, { hasTemplateIntegration } from "@calcom/features/webhooks/lib/integrationTemplate";
-import { WebhookVersion } from "@calcom/features/webhooks/lib/interface/i-webhook-repository";
+import { WebhookVersion } from "@calcom/features/webhooks/lib/interface/webhook-repository";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { TimeUnit, WebhookTriggerEvents } from "@calcom/prisma/enums";
 import type { RouterOutputs } from "@calcom/trpc/react";

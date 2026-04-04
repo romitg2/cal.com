@@ -1,4 +1,4 @@
-import type { IWebhookRepository } from "../interface/i-webhook-repository";
+import type { IWebhookRepository } from "../interface/webhook-repository";
 import type {
   IBookingWebhookService,
   IFormWebhookService,

@@ -5,7 +5,7 @@ import incompleteBookingActionFunctions from "@calcom/app-store/routing-forms/li
 import {
   DEFAULT_WEBHOOK_VERSION,
   WebhookVersion,
-} from "@calcom/features/webhooks/lib/interface/i-webhook-repository";
+} from "@calcom/features/webhooks/lib/interface/webhook-repository";
 import { sendGenericWebhookPayload } from "@calcom/features/webhooks/lib/sendPayload";
 import prisma from "@calcom/prisma";
 

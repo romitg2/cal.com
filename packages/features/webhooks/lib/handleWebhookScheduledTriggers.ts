@@ -3,7 +3,7 @@ import { getWebhookFeature } from "@calcom/features/di/webhooks/containers/webho
 import logger from "@calcom/lib/logger";
 import type { PrismaClient } from "@calcom/prisma";
 import { prisma } from "@calcom/prisma";
-import { DEFAULT_WEBHOOK_VERSION } from "./interface/i-webhook-repository";
+import { DEFAULT_WEBHOOK_VERSION } from "./interface/webhook-repository";
 import { createWebhookSignature, jsonParse } from "./sendPayload";
 
 export async function handleWebhookScheduledTriggers(_prisma?: PrismaClient) {

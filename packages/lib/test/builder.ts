@@ -1,6 +1,6 @@
 import getICalUID from "@calcom/emails/lib/getICalUID";
 // biome-ignore lint/style/noRestrictedImports: pre-existing violation
-import { WebhookVersion } from "@calcom/features/webhooks/lib/interface/i-webhook-repository";
+import { WebhookVersion } from "@calcom/features/webhooks/lib/interface/webhook-repository";
 import type { Booking, BookingReference, EventType, Prisma, Webhook } from "@calcom/prisma/client";
 import { BookingStatus, CreationSource, DisableCancelRescheduleScope } from "@calcom/prisma/enums";
 import type { CalendarEvent, Person, VideoCallData } from "@calcom/types/Calendar";

@@ -18,8 +18,8 @@ import type {
   ScheduledTriggerCreateInput,
   ScheduledTriggerForExecution,
   WebhookVersion,
-} from "../interface/i-webhook-repository";
-import { parseWebhookVersion } from "../interface/i-webhook-repository";
+} from "../interface/webhook-repository";
+import { parseWebhookVersion } from "../interface/webhook-repository";
 import type { GetSubscribersOptions } from "./types";
 
 // Type for raw query results from the database

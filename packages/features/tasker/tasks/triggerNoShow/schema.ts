@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { TIME_UNIT } from "@calcom/features/ee/workflows/lib/constants";
 import { WebhookTriggerEvents } from "@calcom/prisma/enums";
-import { WebhookVersion } from "../../../webhooks/lib/interface/i-webhook-repository";
+import { WebhookVersion } from "../../../webhooks/lib/interface/webhook-repository";
 
 const commonSchema = z.object({
   triggerEvent: z.enum([

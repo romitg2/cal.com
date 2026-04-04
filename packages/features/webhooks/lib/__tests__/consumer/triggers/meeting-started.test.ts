@@ -2,7 +2,7 @@ import { WebhookTriggerEvents } from "@calcom/prisma/enums";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PayloadBuilderFactory } from "../../../factory/versioned/PayloadBuilderFactory";
 import type { IWebhookDataFetcher } from "../../../interface/IWebhookDataFetcher";
-import type { IWebhookRepository } from "../../../interface/i-webhook-repository";
+import type { IWebhookRepository } from "../../../interface/webhook-repository";
 import type { ILogger } from "../../../interface/infrastructure";
 import type { IWebhookService } from "../../../interface/services";
 import { WebhookTaskConsumer } from "../../../service/WebhookTaskConsumer";

@@ -4,7 +4,7 @@ import type {
   PaymentTriggerEvents,
   RecordingTriggerEvents,
 } from "../factory/versioned/PayloadBuilderFactory";
-import type { IWebhookRepository } from "../interface/i-webhook-repository";
+import type { IWebhookRepository } from "../interface/webhook-repository";
 import type { ILogger } from "../interface/infrastructure";
 import type {
   IWebhookProducerService,

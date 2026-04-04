@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { WebhookVersion } from "@calcom/features/webhooks/lib/interface/i-webhook-repository";
+import { WebhookVersion } from "@calcom/features/webhooks/lib/interface/webhook-repository";
 import sendPayload from "@calcom/features/webhooks/lib/sendPayload";
 
 const sendWebhookPayloadSchema = z.object({

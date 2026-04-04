@@ -5,7 +5,7 @@ import { WEBHOOK_TOKENS } from "@calcom/features/di/webhooks/Webhooks.tokens";
 import type { TeamRepository } from "@calcom/features/ee/teams/repositories/TeamRepository";
 import type { EventTypeRepository } from "@calcom/features/eventtypes/repositories/eventTypeRepository";
 import { UserRepository } from "@calcom/features/users/repositories/UserRepository";
-import type { IWebhookRepository } from "@calcom/features/webhooks/lib/interface/i-webhook-repository";
+import type { IWebhookRepository } from "@calcom/features/webhooks/lib/interface/webhook-repository";
 import type { PrismaClient } from "@calcom/prisma";
 import { prisma } from "@calcom/prisma";
 import type { Webhook } from "@calcom/prisma/client";

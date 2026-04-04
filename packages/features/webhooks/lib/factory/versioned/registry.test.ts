@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { WebhookTriggerEvents } from "@calcom/prisma/enums";
 
-import { DEFAULT_WEBHOOK_VERSION, WebhookVersion } from "../../interface/i-webhook-repository";
+import { DEFAULT_WEBHOOK_VERSION, WebhookVersion } from "../../interface/webhook-repository";
 import { createPayloadBuilderFactory } from "./registry";
 import * as V2021_10_20 from "./v2021-10-20";
 

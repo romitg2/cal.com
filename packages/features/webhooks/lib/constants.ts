@@ -1,5 +1,5 @@
 import { WebhookTriggerEvents } from "@calcom/prisma/enums";
-import { WebhookVersion } from "./interface/i-webhook-repository";
+import { WebhookVersion } from "./interface/webhook-repository";
 
 // this is exported as we can't use `WebhookTriggerEvents` in the frontend straight-off
 

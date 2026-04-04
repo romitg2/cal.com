@@ -1,5 +1,5 @@
 import type { WebhookFeature } from "@calcom/features/webhooks/lib/facade/WebhookFeature";
-import type { IWebhookRepository } from "@calcom/features/webhooks/lib/interface/i-webhook-repository";
+import type { IWebhookRepository } from "@calcom/features/webhooks/lib/interface/webhook-repository";
 import type {
   IBookingWebhookService,
   IFormWebhookService,

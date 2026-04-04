@@ -3,7 +3,7 @@ import type { WebhookTriggerEvents } from "@calcom/prisma/enums";
 import { logger, retry, schemaTask, type TaskWithSchema } from "@trigger.dev/sdk";
 import type { WebhookDeliveryResult, WebhookSubscriber } from "../../dto/types";
 import type { WebhookPayload } from "../../factory/types";
-import type { IWebhookRepository } from "../../interface/i-webhook-repository";
+import type { IWebhookRepository } from "../../interface/webhook-repository";
 import {
   isFlatWebhookTrigger,
   isGenericWebhookTrigger,

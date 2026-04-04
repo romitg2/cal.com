@@ -1,7 +1,7 @@
 import type { TimeUnit, WebhookTriggerEvents } from "@calcom/prisma/enums";
 
 import type { Webhook, WebhookSubscriber } from "../../dto/types";
-import { parseWebhookVersion } from "../../interface/i-webhook-repository";
+import { parseWebhookVersion } from "../../interface/webhook-repository";
 
 /**
  * Full webhook from Prisma (for CRUD operations)

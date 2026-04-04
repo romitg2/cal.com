@@ -7,7 +7,7 @@ vi.mock("@calcom/features/tasker", () => ({
 }));
 
 import tasker from "@calcom/features/tasker";
-import { WebhookVersion } from "./interface/i-webhook-repository";
+import { WebhookVersion } from "./interface/webhook-repository";
 import schedulePayload from "./schedulePayload";
 
 describe("schedulePayload", () => {

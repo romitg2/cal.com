@@ -120,7 +120,7 @@ import { WorkflowService } from "@calcom/features/ee/workflows/lib/service/workf
 // biome-ignore lint/style/noRestrictedImports: pre-existing violation
 import getWebhooks from "@calcom/features/webhooks/lib/getWebhooks";
 // biome-ignore lint/style/noRestrictedImports: pre-existing violation
-import { WebhookVersion } from "@calcom/features/webhooks/lib/interface/i-webhook-repository";
+import { WebhookVersion } from "@calcom/features/webhooks/lib/interface/webhook-repository";
 // biome-ignore lint/style/noRestrictedImports: pre-existing violation
 import sendPayload from "@calcom/features/webhooks/lib/sendOrSchedulePayload";
 import { getVideoCallUrlFromCalEvent } from "@calcom/lib/CalEventParser";

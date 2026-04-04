@@ -15,7 +15,7 @@ import type { ApiKey, Booking, Webhook } from "@calcom/prisma/client";
 import { BookingStatus, WebhookTriggerEvents } from "@calcom/prisma/enums";
 import { bookingMetadataSchema } from "@calcom/prisma/zod-utils";
 import { v4 } from "uuid";
-import { DEFAULT_WEBHOOK_VERSION, type WebhookVersion } from "./interface/i-webhook-repository";
+import { DEFAULT_WEBHOOK_VERSION, type WebhookVersion } from "./interface/webhook-repository";
 
 const SCHEDULING_TRIGGER: WebhookTriggerEvents[] = [
   WebhookTriggerEvents.MEETING_ENDED,

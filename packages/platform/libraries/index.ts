@@ -29,7 +29,7 @@ export { getUsernameList } from "@calcom/features/eventtypes/lib/defaultEvents";
 export {
   DEFAULT_WEBHOOK_VERSION,
   WebhookVersion,
-} from "@calcom/features/webhooks/lib/interface/i-webhook-repository";
+} from "@calcom/features/webhooks/lib/interface/webhook-repository";
 export type { IWebhookProducerService } from "@calcom/features/webhooks/lib/interface/WebhookProducerService";
 export {
   AttributeType,
