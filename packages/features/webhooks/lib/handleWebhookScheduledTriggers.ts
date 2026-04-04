@@ -36,7 +36,7 @@ export async function handleWebhookScheduledTriggers() {
     };
 
     if (webhook) {
-      headers["X-Cal-Signature-256"] = createWebhookSignature({ secret: webhook.secret, body: job.payload });
+      headers["X-Cal-Signature-256"] = createWebhookSignature({ secret: webhook.secret, body: job.payload ?? "" });
     }
     fetchPromises.push(
       fetch(job.subscriberUrl, {
