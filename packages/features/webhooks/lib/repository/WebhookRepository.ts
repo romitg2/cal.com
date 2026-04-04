@@ -643,12 +643,13 @@ export class WebhookRepository implements IWebhookRepository {
     userId?: number;
     teamId?: number;
   }): Promise<{ count: number }> {
-    const bookingWhere: Prisma.BookingWhereInput = {};
-    if (options.userId) {
-      bookingWhere.eventType = { userId: options.userId };
-    } else if (options.teamId) {
-      bookingWhere.eventType = { teamId: options.teamId };
+    if (!options.userId && !options.teamId) {
+      throw new Error("Either userId or teamId must be provided");
     }
+
+    const bookingWhere: Prisma.BookingWhereInput = {
+      eventType: options.userId ? { userId: options.userId } : { teamId: options.teamId },
+    };
 
     return await this.prisma.webhookScheduledTriggers.deleteMany({
       where: {

@@ -159,6 +159,30 @@ describe("WebhookRepository", () => {
         },
       });
     });
+
+    it("should create a scheduled trigger with null appId", async () => {
+      mockPrisma.webhookScheduledTriggers.create.mockResolvedValue({});
+
+      await repository.createScheduledTrigger({
+        payload: '{"triggerEvent":"MEETING_ENDED"}',
+        appId: null,
+        startAfter: new Date("2025-01-01"),
+        subscriberUrl: "https://example.com/webhook",
+        webhookId: "webhook-456",
+        bookingId: 789,
+      });
+
+      expect(mockPrisma.webhookScheduledTriggers.create).toHaveBeenCalledWith({
+        data: {
+          payload: '{"triggerEvent":"MEETING_ENDED"}',
+          appId: null,
+          startAfter: new Date("2025-01-01"),
+          subscriberUrl: "https://example.com/webhook",
+          webhook: { connect: { id: "webhook-456" } },
+          booking: { connect: { id: 789 } },
+        },
+      });
+    });
   });
 
   describe("deleteOldScheduledTriggers", () => {
@@ -173,6 +197,15 @@ describe("WebhookRepository", () => {
       });
       expect(result.count).toBe(5);
     });
+
+    it("should return count of 0 when no triggers match", async () => {
+      mockPrisma.webhookScheduledTriggers.deleteMany.mockResolvedValue({ count: 0 });
+      const olderThan = new Date("2020-01-01");
+
+      const result = await repository.deleteOldScheduledTriggers(olderThan);
+
+      expect(result.count).toBe(0);
+    });
   });
 
   describe("deleteScheduledTriggersByBookingId", () => {
@@ -185,6 +218,14 @@ describe("WebhookRepository", () => {
         where: { bookingId: 123 },
       });
       expect(result.count).toBe(2);
+    });
+
+    it("should return count of 0 when booking has no triggers", async () => {
+      mockPrisma.webhookScheduledTriggers.deleteMany.mockResolvedValue({ count: 0 });
+
+      const result = await repository.deleteScheduledTriggersByBookingId(999);
+
+      expect(result.count).toBe(0);
     });
   });
 
@@ -252,6 +293,34 @@ describe("WebhookRepository", () => {
       });
       expect(result.count).toBe(2);
     });
+
+    it("should prioritize userId over teamId when both are provided", async () => {
+      mockPrisma.webhookScheduledTriggers.deleteMany.mockResolvedValue({ count: 1 });
+
+      const result = await repository.deleteScheduledTriggersByAppIdAndOwner({
+        appId: "test-app",
+        userId: 123,
+        teamId: 456,
+      });
+
+      expect(mockPrisma.webhookScheduledTriggers.deleteMany).toHaveBeenCalledWith({
+        where: {
+          appId: "test-app",
+          booking: { eventType: { userId: 123 } },
+        },
+      });
+      expect(result.count).toBe(1);
+    });
+
+    it("should throw error when neither userId nor teamId is provided", async () => {
+      await expect(
+        repository.deleteScheduledTriggersByAppIdAndOwner({
+          appId: "test-app",
+        })
+      ).rejects.toThrow("Either userId or teamId must be provided");
+
+      expect(mockPrisma.webhookScheduledTriggers.deleteMany).not.toHaveBeenCalled();
+    });
   });
 
   describe("deleteScheduledTriggerById", () => {
@@ -293,6 +362,34 @@ describe("WebhookRepository", () => {
         },
       });
       expect(result).toEqual(mockTriggers);
+    });
+
+    it("should return empty array when no triggers are ready", async () => {
+      mockPrisma.webhookScheduledTriggers.findMany.mockResolvedValue([]);
+      const beforeDate = new Date("2020-01-01");
+
+      const result = await repository.findScheduledTriggersReadyToRun(beforeDate);
+
+      expect(result).toEqual([]);
+    });
+
+    it("should handle triggers with null webhook (legacy triggers)", async () => {
+      const mockTriggers = [
+        {
+          id: 1,
+          jobName: "legacy-app_webhook-123",
+          payload: '{"triggerEvent":"MEETING_ENDED"}',
+          subscriberUrl: "https://example.com/webhook",
+          webhook: null,
+        },
+      ];
+      mockPrisma.webhookScheduledTriggers.findMany.mockResolvedValue(mockTriggers);
+      const beforeDate = new Date("2025-01-01");
+
+      const result = await repository.findScheduledTriggersReadyToRun(beforeDate);
+
+      expect(result).toEqual(mockTriggers);
+      expect(result[0].webhook).toBeNull();
     });
   });
 });
