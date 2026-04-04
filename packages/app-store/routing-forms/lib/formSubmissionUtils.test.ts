@@ -12,7 +12,7 @@ import type { WebhookSubscriber } from "@calcom/features/webhooks/lib/dto/types"
 // biome-ignore lint/style/noRestrictedImports: pre-existing violation
 import getWebhooks from "@calcom/features/webhooks/lib/getWebhooks";
 // biome-ignore lint/style/noRestrictedImports: pre-existing violation
-import { WebhookVersion as WebhookVersionEnum } from "@calcom/features/webhooks/lib/interface/IWebhookRepository";
+import { WebhookVersion as WebhookVersionEnum } from "@calcom/features/webhooks/lib/interface/i-webhook-repository";
 // biome-ignore lint/style/noRestrictedImports: pre-existing violation
 import { sendGenericWebhookPayload } from "@calcom/features/webhooks/lib/sendPayload";
 import {

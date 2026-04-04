@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WebhookVersion } from "./interface/IWebhookRepository";
+import { WebhookVersion } from "./interface/i-webhook-repository";
 import type { BookingNoShowUpdatedPayload, EventPayloadType, OOOEntryPayloadType } from "./sendPayload";
 import sendPayload, {
   createWebhookSignature,

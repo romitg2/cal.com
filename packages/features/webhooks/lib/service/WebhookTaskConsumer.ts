@@ -22,8 +22,8 @@ import type {
 import type { WebhookPayload } from "../factory/types";
 import type { PayloadBuilderFactory } from "../factory/versioned/PayloadBuilderFactory";
 import type { FetchEventDataResult, IWebhookDataFetcher } from "../interface/IWebhookDataFetcher";
-import type { IWebhookRepository } from "../interface/IWebhookRepository";
-import { DEFAULT_WEBHOOK_VERSION } from "../interface/IWebhookRepository";
+import type { IWebhookRepository } from "../interface/i-webhook-repository";
+import { DEFAULT_WEBHOOK_VERSION } from "../interface/i-webhook-repository";
 import type { ILogger } from "../interface/infrastructure";
 import type { IWebhookService } from "../interface/services";
 import type {

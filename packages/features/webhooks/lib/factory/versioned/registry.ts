@@ -1,9 +1,9 @@
-import { DEFAULT_WEBHOOK_VERSION } from "../../interface/IWebhookRepository";
+import { DEFAULT_WEBHOOK_VERSION } from "../../interface/i-webhook-repository";
 import { PayloadBuilderFactory } from "./PayloadBuilderFactory";
 import * as V2021_10_20 from "./v2021-10-20";
 
 // Re-export for consumers
-export { DEFAULT_WEBHOOK_VERSION } from "../../interface/IWebhookRepository";
+export { DEFAULT_WEBHOOK_VERSION } from "../../interface/i-webhook-repository";
 
 /**
  * Create and initialize a PayloadBuilderFactory with all registered versions.

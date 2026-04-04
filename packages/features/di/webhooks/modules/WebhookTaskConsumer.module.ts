@@ -1,6 +1,6 @@
 import type { PayloadBuilderFactory } from "@calcom/features/webhooks/lib/factory/versioned/PayloadBuilderFactory";
 import type { IWebhookDataFetcher } from "@calcom/features/webhooks/lib/interface/IWebhookDataFetcher";
-import type { IWebhookRepository } from "@calcom/features/webhooks/lib/interface/IWebhookRepository";
+import type { IWebhookRepository } from "@calcom/features/webhooks/lib/interface/i-webhook-repository";
 import type { ILogger } from "@calcom/features/webhooks/lib/interface/infrastructure";
 import type { IWebhookService } from "@calcom/features/webhooks/lib/interface/services";
 import { WebhookTaskConsumer } from "@calcom/features/webhooks/lib/service/WebhookTaskConsumer";

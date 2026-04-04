@@ -18,8 +18,8 @@ import type {
   ScheduledTriggerCreateInput,
   ScheduledTriggerForExecution,
   WebhookVersion,
-} from "../interface/IWebhookRepository";
-import { parseWebhookVersion } from "../interface/IWebhookRepository";
+} from "../interface/i-webhook-repository";
+import { parseWebhookVersion } from "../interface/i-webhook-repository";
 import type { GetSubscribersOptions } from "./types";
 
 // Type for raw query results from the database
@@ -580,8 +580,6 @@ export class WebhookRepository implements IWebhookRepository {
       select: { id: true },
     });
   }
-
-  // WebhookScheduledTriggers methods
 
   async createScheduledTrigger(data: ScheduledTriggerCreateInput): Promise<void> {
     await this.prisma.webhookScheduledTriggers.create({

@@ -1,7 +1,7 @@
 import { EventTypeRepository } from "@calcom/features/eventtypes/repositories/eventTypeRepository";
 import { UsersRepository } from "@calcom/features/users/users.repository";
 import { createPayloadBuilderFactory } from "@calcom/features/webhooks/lib/factory/versioned/registry";
-import { WebhookRepository } from "@calcom/features/webhooks/lib/repository/WebhookRepository";
+import { WebhookRepository } from "@calcom/features/webhooks/lib/repository/webhook-repository";
 import { BookingWebhookService } from "@calcom/features/webhooks/lib/service/BookingWebhookService";
 import { FormWebhookService } from "@calcom/features/webhooks/lib/service/FormWebhookService";
 import { OOOWebhookService } from "@calcom/features/webhooks/lib/service/OOOWebhookService";

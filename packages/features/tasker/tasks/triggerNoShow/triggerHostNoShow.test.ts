@@ -13,7 +13,7 @@ import { BookingStatus, TimeUnit, WebhookTriggerEvents } from "@calcom/prisma/en
 import { expectWebhookToHaveBeenCalledWith } from "@calcom/testing/lib/bookingScenario/expects";
 import { setupAndTeardown } from "@calcom/testing/lib/bookingScenario/setupAndTeardown";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { WebhookVersion } from "../../../webhooks/lib/interface/IWebhookRepository";
+import { WebhookVersion } from "../../../webhooks/lib/interface/i-webhook-repository";
 import { calculateMaxStartTime } from "./common";
 import { getMeetingSessionsFromRoomName } from "./getMeetingSessionsFromRoomName";
 import type { TSendNoShowWebhookPayloadSchema } from "./schema";

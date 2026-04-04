@@ -3,8 +3,8 @@ import type { IUsersRepository } from "@calcom/features/users/users.repository.i
 import type { PrismaClient } from "@calcom/prisma";
 import { WebhookTriggerEvents } from "@calcom/prisma/enums";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { WebhookVersion } from "../interface/IWebhookRepository";
-import { WebhookRepository } from "./WebhookRepository";
+import { WebhookVersion } from "../interface/i-webhook-repository";
+import { WebhookRepository } from "./webhook-repository";
 
 vi.mock("@calcom/prisma", () => ({
   default: {},

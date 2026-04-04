@@ -8,7 +8,7 @@ import type {
   EventTypeBookingFields,
 } from "@calcom/prisma/zod-utils";
 import type { CalendarEvent, ConferenceData, Person } from "@calcom/types/Calendar";
-import type { WebhookVersion } from "../interface/IWebhookRepository";
+import type { WebhookVersion } from "../interface/i-webhook-repository";
 
 /**
  * Booking shape returned by BookingRepository.findBookingForMeetingWebhook().

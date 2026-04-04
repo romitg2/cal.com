@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import { DEFAULT_WEBHOOK_VERSION } from "./interface/IWebhookRepository";
+import { DEFAULT_WEBHOOK_VERSION } from "./interface/i-webhook-repository";
 import { handleWebhookScheduledTriggers } from "./handleWebhookScheduledTriggers";
 import type { PrismaClient } from "@calcom/prisma";
 

@@ -1,6 +1,6 @@
 import { createModule } from "@evyweb/ioctopus";
 
-import { WebhookRepository } from "@calcom/features/webhooks/lib/repository/WebhookRepository";
+import { WebhookRepository } from "@calcom/features/webhooks/lib/repository/webhook-repository";
 
 import { WEBHOOK_TOKENS } from "../webhooks.tokens";
 

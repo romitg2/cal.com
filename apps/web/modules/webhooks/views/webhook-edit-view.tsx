@@ -1,7 +1,7 @@
 "use client";
 
 import { WEBHOOK_TRIGGER_EVENTS } from "@calcom/features/webhooks/lib/constants";
-import type { WebhookVersion } from "@calcom/features/webhooks/lib/interface/IWebhookRepository";
+import type { WebhookVersion } from "@calcom/features/webhooks/lib/interface/i-webhook-repository";
 import { subscriberUrlReserved } from "@calcom/features/webhooks/lib/subscriberUrlReserved";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import type { WebhookTriggerEvents } from "@calcom/prisma/enums";

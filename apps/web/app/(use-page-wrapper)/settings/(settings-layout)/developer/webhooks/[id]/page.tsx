@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { getServerSession } from "@calcom/features/auth/lib/getServerSession";
 import { PermissionCheckService } from "@calcom/features/pbac/services/permission-check.service";
-import { WebhookRepository } from "@calcom/features/webhooks/lib/repository/WebhookRepository";
+import { WebhookRepository } from "@calcom/features/webhooks/lib/repository/webhook-repository";
 import { APP_NAME } from "@calcom/lib/constants";
 import { MembershipRole } from "@calcom/prisma/enums";
 

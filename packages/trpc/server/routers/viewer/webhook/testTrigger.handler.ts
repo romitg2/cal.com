@@ -1,4 +1,4 @@
-import { DEFAULT_WEBHOOK_VERSION } from "@calcom/features/webhooks/lib/interface/IWebhookRepository";
+import { DEFAULT_WEBHOOK_VERSION } from "@calcom/features/webhooks/lib/interface/i-webhook-repository";
 import type { EventPayloadType } from "@calcom/features/webhooks/lib/sendPayload";
 import sendPayload from "@calcom/features/webhooks/lib/sendPayload";
 import { validateUrlForSSRFSync } from "@calcom/lib/ssrfProtection";

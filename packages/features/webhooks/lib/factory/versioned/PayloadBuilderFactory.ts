@@ -16,7 +16,7 @@ import type {
   TranscriptionGeneratedDTO,
   WebhookEventDTO,
 } from "../../dto/types";
-import type { WebhookVersion } from "../../interface/IWebhookRepository";
+import type { WebhookVersion } from "../../interface/i-webhook-repository";
 import type { WebhookPayload } from "../types";
 
 const log = logger.getSubLogger({ prefix: ["WebhookPayloadBuilderFactory"] });

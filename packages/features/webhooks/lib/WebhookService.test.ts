@@ -5,7 +5,7 @@ import { WebhookTriggerEvents } from "@calcom/prisma/enums";
 import type { WebhookSubscriber } from "./dto/types";
 import { WebhookService } from "./WebhookService";
 import getWebhooks from "./getWebhooks";
-import { WebhookVersion as WebhookVersionEnum } from "./interface/IWebhookRepository";
+import { WebhookVersion as WebhookVersionEnum } from "./interface/i-webhook-repository";
 
 vi.mock("./getWebhooks", () => ({
   default: vi.fn(),

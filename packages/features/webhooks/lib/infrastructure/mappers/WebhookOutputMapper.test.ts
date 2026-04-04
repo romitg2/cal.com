@@ -1,6 +1,6 @@
 import { WebhookTriggerEvents } from "@calcom/prisma/enums";
 import { describe, expect, it } from "vitest";
-import { WebhookVersion } from "../../interface/IWebhookRepository";
+import { WebhookVersion } from "../../interface/i-webhook-repository";
 import { WebhookOutputMapper } from "./WebhookOutputMapper";
 
 describe("WebhookOutputMapper", () => {
