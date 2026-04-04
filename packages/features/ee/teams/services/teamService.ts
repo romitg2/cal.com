@@ -5,7 +5,7 @@ import { CreditService } from "@calcom/features/ee/billing/credit-service";
 import { SeatChangeTrackingService } from "@calcom/features/ee/billing/service/seatTracking/SeatChangeTrackingService";
 import { deleteWorkfowRemindersOfRemovedMember } from "@calcom/features/ee/teams/lib/deleteWorkflowRemindersOfRemovedMember";
 import { updateNewTeamMemberEventTypes } from "@calcom/features/ee/teams/lib/queries";
-import { WorkflowService } from "@calcom/features/ee/workflows/lib/service/WorkflowService";
+import { WorkflowService } from "@calcom/features/ee/workflows/lib/service/workflow-service";
 import { OnboardingPathService } from "@calcom/features/onboarding/lib/onboarding-path.service";
 import { createAProfileForAnExistingUser } from "@calcom/features/profile/lib/createAProfileForAnExistingUser";
 import { ProfileRepository } from "@calcom/features/profile/repositories/ProfileRepository";
@@ -144,11 +144,23 @@ export class TeamService {
       log.error(`Failed to delete workflow reminders for team ${id}`, e);
     }
 
-    // Step 4: Delete the team from the database. This is the core "commit" point.
+    // Step 4: Clean up notification preferences (no FK cascade on polymorphic targetId).
+    try {
+      await prisma.notificationPreference.deleteMany({
+        where: {
+          targetType: "TEAM",
+          targetId: id,
+        },
+      });
+    } catch (e) {
+      log.error(`Failed to delete notification preferences for team ${id}`, e);
+    }
+
+    // Step 5: Delete the team from the database. This is the core "commit" point.
     const teamRepo = getTeamRepository();
     const deletedTeam = await teamRepo.deleteById({ id });
 
-    // Step 5: Clean up any final, non-critical external state.
+    // Step 6: Clean up any final, non-critical external state.
     if (deletedTeam && deletedTeam.isOrganization && deletedTeam.slug) {
       deleteDomain(deletedTeam.slug);
     }

@@ -23,6 +23,20 @@ export const getBooking = async (bookingId: number) => {
           parentId: true,
           canSendCalVideoTranscriptionEmails: true,
           customReplyToEmail: true,
+          team: {
+            select: {
+              parentId: true,
+              parent: {
+                select: {
+                  organizationSettings: {
+                    select: {
+                      disableAttendeeCalVideoRecordingEmail: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
       user: {
@@ -33,6 +47,11 @@ export const getBooking = async (bookingId: number) => {
           name: true,
           locale: true,
           destinationCalendar: true,
+          profiles: {
+            select: {
+              organizationId: true,
+            },
+          },
         },
       },
     },

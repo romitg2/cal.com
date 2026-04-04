@@ -79,6 +79,27 @@ describe("recording-email-service", () => {
       expect(OrganizerDailyVideoDownloadRecordingEmail).toHaveBeenCalledTimes(1);
       expect(AttendeeDailyVideoDownloadRecordingEmail).toHaveBeenCalledTimes(3);
     });
+
+    it("skips attendee emails when skipAttendeeEmails is true", async () => {
+      const evt = createCalEvent(3);
+      await sendDailyVideoRecordingEmails(evt, "https://download.link/rec", { skipAttendeeEmails: true });
+      expect(OrganizerDailyVideoDownloadRecordingEmail).toHaveBeenCalledTimes(1);
+      expect(AttendeeDailyVideoDownloadRecordingEmail).not.toHaveBeenCalled();
+    });
+
+    it("sends attendee emails when skipAttendeeEmails is false", async () => {
+      const evt = createCalEvent(2);
+      await sendDailyVideoRecordingEmails(evt, "https://download.link/rec", { skipAttendeeEmails: false });
+      expect(OrganizerDailyVideoDownloadRecordingEmail).toHaveBeenCalledTimes(1);
+      expect(AttendeeDailyVideoDownloadRecordingEmail).toHaveBeenCalledTimes(2);
+    });
+
+    it("sends attendee emails when options is undefined", async () => {
+      const evt = createCalEvent(2);
+      await sendDailyVideoRecordingEmails(evt, "https://download.link/rec");
+      expect(OrganizerDailyVideoDownloadRecordingEmail).toHaveBeenCalledTimes(1);
+      expect(AttendeeDailyVideoDownloadRecordingEmail).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe("sendDailyVideoTranscriptEmails", () => {
@@ -102,6 +123,45 @@ describe("recording-email-service", () => {
       await sendDailyVideoTranscriptEmails(evt, transcripts);
       expect(OrganizerDailyVideoDownloadTranscriptEmail).toHaveBeenCalledTimes(1);
       expect(AttendeeDailyVideoDownloadTranscriptEmail).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe("smtp", () => {
+    it("passes calEvent with organizationId to recording email constructors", async () => {
+      const orgId = 42;
+      const evt = { ...createCalEvent(1), organizationId: orgId } as CalendarEvent;
+      await sendDailyVideoRecordingEmails(evt, "https://download.link/rec");
+
+      // Verify organizer recording email received the calEvent with organizationId
+      const organizerCall = vi.mocked(OrganizerDailyVideoDownloadRecordingEmail).mock.calls[0];
+      expect(organizerCall[0].organizationId).toBe(orgId);
+
+      // Verify attendee recording email received the calEvent with organizationId
+      const attendeeCall = vi.mocked(AttendeeDailyVideoDownloadRecordingEmail).mock.calls[0];
+      expect(attendeeCall[0].organizationId).toBe(orgId);
+    });
+
+    it("passes calEvent with organizationId to transcript email constructors", async () => {
+      const orgId = 42;
+      const evt = { ...createCalEvent(1), organizationId: orgId } as CalendarEvent;
+      const transcripts = ["https://transcript.link/1"];
+      await sendDailyVideoTranscriptEmails(evt, transcripts);
+
+      // Verify organizer transcript email received the calEvent with organizationId
+      const organizerCall = vi.mocked(OrganizerDailyVideoDownloadTranscriptEmail).mock.calls[0];
+      expect(organizerCall[0].organizationId).toBe(orgId);
+
+      // Verify attendee transcript email received the calEvent with organizationId
+      const attendeeCall = vi.mocked(AttendeeDailyVideoDownloadTranscriptEmail).mock.calls[0];
+      expect(attendeeCall[0].organizationId).toBe(orgId);
+    });
+
+    it("passes calEvent without organizationId when not set", async () => {
+      const evt = createCalEvent(1);
+      await sendDailyVideoRecordingEmails(evt, "https://download.link/rec");
+
+      const organizerCall = vi.mocked(OrganizerDailyVideoDownloadRecordingEmail).mock.calls[0];
+      expect(organizerCall[0].organizationId).toBeUndefined();
     });
   });
 });

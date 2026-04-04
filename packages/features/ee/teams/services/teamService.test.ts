@@ -1,7 +1,7 @@
 import prismaMock from "@calcom/testing/lib/__mocks__/prismaMock";
 import { getTeamRepository } from "@calcom/features/di/containers/TeamRepository";
 import { updateNewTeamMemberEventTypes } from "@calcom/features/ee/teams/lib/queries";
-import { WorkflowService } from "@calcom/features/ee/workflows/lib/service/WorkflowService";
+import { WorkflowService } from "@calcom/features/ee/workflows/lib/service/workflow-service";
 import { createAProfileForAnExistingUser } from "@calcom/features/profile/lib/createAProfileForAnExistingUser";
 import { deleteDomain } from "@calcom/lib/domainManager/organization";
 import { ErrorCode } from "@calcom/lib/errorCodes";
@@ -21,7 +21,7 @@ const { MockSeatChangeTrackingService } = vi.hoisted(() => {
 
 vi.mock("@calcom/ee/billing/di/containers/Billing");
 vi.mock("@calcom/features/di/containers/TeamRepository");
-vi.mock("@calcom/features/ee/workflows/lib/service/WorkflowService");
+vi.mock("@calcom/features/ee/workflows/lib/service/workflow-service");
 vi.mock("@calcom/lib/domainManager/organization");
 vi.mock("@calcom/features/ee/teams/lib/removeMember");
 vi.mock("@calcom/features/profile/lib/createAProfileForAnExistingUser");
@@ -34,11 +34,6 @@ vi.mock("@calcom/features/ee/billing/credit-service", () => ({
   CreditService: class {
     moveCreditsFromTeamToUser = mockMoveCreditsFromTeamToUser;
   },
-}));
-
-vi.mock("@calcom/prisma", () => ({
-  default: {},
-  prisma: {},
 }));
 
 const mockTeamBilling = {
@@ -89,9 +84,32 @@ describe("TeamService", () => {
       expect(mockTeamBilling.cancel).toHaveBeenCalled();
       expect(mockMoveCreditsFromTeamToUser).toHaveBeenCalledWith({ teamId: 1, userId: 42 });
       expect(WorkflowService.deleteWorkflowRemindersOfRemovedTeam).toHaveBeenCalledWith(1);
+      expect(prismaMock.notificationPreference.deleteMany).toHaveBeenCalledWith({
+        where: { targetType: "TEAM", targetId: 1 },
+      });
       expect(mockTeamRepo.deleteById).toHaveBeenCalledWith({ id: 1 });
       expect(deleteDomain).toHaveBeenCalledWith("deleted-team");
       expect(result).toEqual(mockDeletedTeam);
+    });
+
+    it("should clean up notification preferences before deleting team", async () => {
+      const mockDeletedTeam = { id: 5, name: "Team Five", isOrganization: false, slug: null };
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-expect-error
+      const mockTeamRepo = {
+        deleteById: vi.fn().mockResolvedValue(mockDeletedTeam),
+      } as { deleteById: ReturnType<typeof vi.fn> };
+      vi.mocked(getTeamRepository).mockReturnValue(mockTeamRepo as never);
+
+      await TeamService.delete({ id: 5, deletedByUserId: 10 });
+
+      expect(prismaMock.notificationPreference.deleteMany).toHaveBeenCalledWith({
+        where: { targetType: "TEAM", targetId: 5 },
+      });
+      // Cleanup must happen before the team is deleted
+      const cleanupOrder = prismaMock.notificationPreference.deleteMany.mock.invocationCallOrder[0];
+      const deleteOrder = mockTeamRepo.deleteById.mock.invocationCallOrder[0];
+      expect(cleanupOrder).toBeLessThan(deleteOrder);
     });
 
     it("should continue deletion even if credit transfer fails", async () => {

@@ -1,0 +1,1647 @@
+import type { BookingSeatRepository } from "@calcom/features/bookings/repositories/BookingSeatRepository";
+import type { WorkflowReminderRepository } from "@calcom/features/ee/workflows/repositories/workflow-reminder-repository";
+import { TimeFormat } from "@calcom/lib/timeFormat";
+import {
+  SchedulingType,
+  TimeUnit,
+  WorkflowActions,
+  WorkflowTemplates,
+  WorkflowTriggerEvents,
+} from "@calcom/prisma/enums";
+import type { CalendarEvent } from "@calcom/types/Calendar";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { EmailWorkflowService } from "./email-workflow-service";
+
+vi.mock("@calcom/emails/workflow-email-service", () => ({
+  sendCustomWorkflowEmail: vi.fn(),
+}));
+
+vi.mock("@calcom/features/profile/lib/hideBranding", () => ({
+  getHideBranding: vi.fn().mockResolvedValue(false),
+}));
+
+vi.mock("@calcom/i18n/server", () => {
+  const interpolationTemplates: Record<string, string> = {
+    need_to_make_a_change_reschedule_cancel: "Need to make a change? {{rescheduleLink}} or {{cancelLink}}",
+    need_to_make_a_change_reschedule: "Need to make a change? {{rescheduleLink}}",
+    need_to_make_a_change_cancel: "Need to make a change? {{cancelLink}}",
+  };
+  return {
+    getTranslation: vi.fn().mockResolvedValue((key: string, options?: Record<string, unknown>) => {
+      const template = interpolationTemplates[key] || key;
+      if (options) {
+        return template.replace(/\{\{(\w+)\}\}/g, (_, k) => String(options[k] ?? ""));
+      }
+      return template;
+    }),
+  };
+});
+
+vi.mock("@calcom/prisma", () => ({
+  default: {},
+  prisma: {},
+}));
+
+vi.mock("@calcom/emails/lib/generateIcsString", () => ({
+  default: vi.fn().mockReturnValue("mock-ics-content"),
+}));
+
+const mockTranslationService = vi.hoisted(() => ({
+  getWorkflowStepTranslation: vi.fn(),
+}));
+
+vi.mock("@calcom/features/di/containers/TranslationService", () => ({
+  getTranslationService: vi.fn().mockResolvedValue(mockTranslationService),
+}));
+
+vi.mock("@calcom/lib/constants", async () => {
+  const actual = await vi.importActual<typeof import("@calcom/lib/constants")>("@calcom/lib/constants");
+  return {
+    ...actual,
+    WEBAPP_URL: "https://cal.com",
+    APP_NAME: "Cal.com",
+  };
+});
+
+const mockCheckIfTeamHasFeature = vi.fn().mockResolvedValue(true);
+vi.mock("@calcom/features/di/containers/TeamFeatureRepository", () => ({
+  getTeamFeatureRepository: vi.fn().mockReturnValue({
+    checkIfTeamHasFeature: (...args: unknown[]) => mockCheckIfTeamHasFeature(...args),
+  }),
+}));
+
+const mockFindEventTypeDisableFlagsByUid = vi.fn().mockResolvedValue({
+  eventType: { disableCancelling: false, disableRescheduling: false },
+});
+vi.mock("@calcom/features/di/containers/BookingRepository", () => ({
+  getBookingRepository: vi.fn().mockReturnValue({
+    findEventTypeDisableFlagsByUid: (...args: unknown[]) => mockFindEventTypeDisableFlagsByUid(...args),
+  }),
+}));
+
+vi.mock("short-uuid", () => ({
+  __esModule: true,
+  default: () => ({ fromUUID: (uid: string) => uid }),
+}));
+
+vi.mock("@calcom/features/ee/billing/credit-service", () => ({
+  CreditService: class {
+    hasAvailableCredits = vi.fn().mockResolvedValue(true);
+  },
+}));
+
+vi.mock("@calcom/features/users/repositories/UserRepository", () => ({
+  UserRepository: class {
+    findById = vi.fn().mockResolvedValue({ createdDate: new Date("2024-01-01") });
+  },
+}));
+
+const mockWorkflowReminderRepository: Pick<WorkflowReminderRepository, "findByIdIncludeStepAndWorkflow"> = {
+  findByIdIncludeStepAndWorkflow: vi.fn(),
+};
+
+const mockBookingSeatRepository: Pick<
+  BookingSeatRepository,
+  "getByUidIncludeAttendee" | "getByReferenceUidWithAttendeeDetails"
+> = {
+  getByUidIncludeAttendee: vi.fn(),
+  getByReferenceUidWithAttendeeDetails: vi.fn(),
+};
+
+describe("EmailWorkflowService", () => {
+  let emailWorkflowService: EmailWorkflowService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(mockTranslationService.getWorkflowStepTranslation).mockReset();
+    emailWorkflowService = new EmailWorkflowService(
+      mockWorkflowReminderRepository as WorkflowReminderRepository,
+      mockBookingSeatRepository as BookingSeatRepository
+    );
+  });
+
+  describe("handleSendEmailWorkflowTask", () => {
+    const mockEvt: Partial<CalendarEvent> = {
+      uid: "booking-123",
+      bookerUrl: "https://cal.com",
+      title: "Test Meeting",
+      startTime: "2024-12-01T10:00:00Z",
+      endTime: "2024-12-01T11:00:00Z",
+      organizer: {
+        name: "Organizer Name",
+        email: "organizer@example.com",
+        timeZone: "UTC",
+        language: { locale: "en", translate: (key: string) => key },
+        timeFormat: 12,
+      },
+      attendees: [
+        {
+          name: "Attendee Name",
+          email: "attendee@example.com",
+          timeZone: "UTC",
+          language: { locale: "en", translate: (key: string) => key },
+        },
+      ],
+    };
+
+    test("should throw error if workflow reminder not found", async () => {
+      vi.mocked(mockWorkflowReminderRepository.findByIdIncludeStepAndWorkflow).mockResolvedValue(null);
+
+      await expect(
+        emailWorkflowService.handleSendEmailWorkflowTask({
+          evt: mockEvt as CalendarEvent,
+          workflowReminderId: 1,
+        })
+      ).rejects.toThrow("Workflow reminder not found with id 1");
+    });
+
+    test("should throw error if workflow step not verified", async () => {
+      vi.mocked(mockWorkflowReminderRepository.findByIdIncludeStepAndWorkflow).mockResolvedValue({
+        id: 1,
+        workflowStep: {
+          id: 1,
+          verifiedAt: null,
+          action: WorkflowActions.EMAIL_ATTENDEE,
+          workflow: { userId: 1, teamId: null },
+        },
+      });
+
+      await expect(
+        emailWorkflowService.handleSendEmailWorkflowTask({
+          evt: mockEvt as CalendarEvent,
+          workflowReminderId: 1,
+        })
+      ).rejects.toThrow("Workflow step id 1 is not verified");
+    });
+
+    test("should throw error if workflow step not found on reminder", async () => {
+      vi.mocked(mockWorkflowReminderRepository.findByIdIncludeStepAndWorkflow).mockResolvedValue({
+        id: 1,
+        workflowStep: null,
+      });
+
+      await expect(
+        emailWorkflowService.handleSendEmailWorkflowTask({
+          evt: mockEvt as CalendarEvent,
+          workflowReminderId: 1,
+        })
+      ).rejects.toThrow("Workflow step not found on reminder with id 1");
+    });
+
+    test("should fetch seat attendee email for seated events", async () => {
+      const mockWorkflowReminder = {
+        id: 1,
+        seatReferenceId: "seat-123",
+        workflowStep: {
+          id: 1,
+          action: WorkflowActions.EMAIL_ATTENDEE,
+          sendTo: null,
+          template: WorkflowTemplates.REMINDER,
+          reminderBody: null,
+          emailSubject: null,
+          sender: null,
+          includeCalendarEvent: false,
+          verifiedAt: new Date(),
+          workflow: {
+            userId: 1,
+            teamId: null,
+            trigger: WorkflowTriggerEvents.BEFORE_EVENT,
+            time: 24,
+            timeUnit: "HOUR",
+          },
+        },
+      };
+
+      vi.mocked(mockWorkflowReminderRepository.findByIdIncludeStepAndWorkflow).mockResolvedValue(
+        mockWorkflowReminder
+      );
+      vi.mocked(mockBookingSeatRepository.getByUidIncludeAttendee).mockResolvedValue({
+        attendee: {
+          email: "seat-attendee@example.com",
+        },
+      });
+
+      try {
+        await emailWorkflowService.handleSendEmailWorkflowTask({
+          evt: mockEvt as CalendarEvent,
+          workflowReminderId: 1,
+        });
+      } catch {
+        // Expected to throw due to incomplete mock setup - we only care about the seat lookup
+      }
+
+      expect(mockBookingSeatRepository.getByUidIncludeAttendee).toHaveBeenCalledWith("seat-123");
+    });
+
+    test("should pass evt.organizationId to sendCustomWorkflowEmail for personal workflow of org user", async () => {
+      const { sendCustomWorkflowEmail } = await import("@calcom/emails/workflow-email-service");
+      const ORG_ID = 42;
+
+      const orgUserEvt = {
+        uid: "booking-123",
+        bookerUrl: "https://cal.com",
+        title: "Test Meeting",
+        startTime: "2024-12-01T10:00:00Z",
+        endTime: "2024-12-01T11:00:00Z",
+        organizer: {
+          name: "Organizer Name",
+          email: "organizer@example.com",
+          timeZone: "UTC",
+          language: { locale: "en", translate: (key: string) => key },
+          timeFormat: TimeFormat.TWELVE_HOUR,
+        },
+        attendees: [
+          {
+            name: "Attendee Name",
+            email: "attendee@example.com",
+            timeZone: "UTC",
+            language: { locale: "en", translate: (key: string) => key },
+          },
+        ],
+        organizationId: ORG_ID,
+      };
+
+      vi.mocked(mockWorkflowReminderRepository.findByIdIncludeStepAndWorkflow).mockResolvedValue({
+        id: 1,
+        seatReferenceId: null,
+        workflowStep: {
+          id: 1,
+          action: WorkflowActions.EMAIL_ATTENDEE,
+          sendTo: null,
+          template: WorkflowTemplates.REMINDER,
+          reminderBody: null,
+          emailSubject: null,
+          sender: null,
+          includeCalendarEvent: false,
+          verifiedAt: new Date(),
+          autoTranslateEnabled: false,
+          sourceLocale: null,
+          numberVerificationPending: false,
+          numberRequired: false,
+          workflow: {
+            userId: 1,
+            teamId: null,
+            team: null,
+            trigger: WorkflowTriggerEvents.BEFORE_EVENT,
+            time: 24,
+            timeUnit: TimeUnit.HOUR,
+          },
+        },
+      });
+
+      await emailWorkflowService.handleSendEmailWorkflowTask({
+        evt: orgUserEvt as CalendarEvent,
+        workflowReminderId: 1,
+      });
+
+      expect(sendCustomWorkflowEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: ORG_ID,
+        })
+      );
+    });
+  });
+
+  describe("generateParametersToBuildEmailWorkflowContent - EMAIL_HOST", () => {
+    const mockCommonScheduleFunctionParams = {
+      triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      timeSpan: {
+        time: 24,
+        timeUnit: TimeUnit.HOUR,
+      },
+      workflowStepId: 1,
+      template: WorkflowTemplates.REMINDER,
+      userId: 1,
+      teamId: null,
+      seatReferenceUid: undefined,
+      verifiedAt: new Date(),
+      creditCheckFn: vi.fn().mockResolvedValue(true),
+    };
+
+    const baseMockEvt: Partial<CalendarEvent> = {
+      uid: "booking-123",
+      bookerUrl: "https://cal.com",
+      title: "Test Meeting",
+      startTime: "2024-12-01T10:00:00Z",
+      endTime: "2024-12-01T11:00:00Z",
+      organizer: {
+        name: "Organizer Name",
+        email: "organizer@example.com",
+        timeZone: "UTC",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        language: { locale: "en", translate: (() => "") as any },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        timeFormat: "h:mma" as any,
+      },
+      attendees: [
+        {
+          name: "Attendee Name",
+          email: "attendee@example.com",
+          timeZone: "UTC",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          language: { locale: "en", translate: (() => "") as any },
+        },
+      ],
+    };
+
+    const mockWorkflowStep = {
+      id: 1,
+      action: WorkflowActions.EMAIL_HOST,
+      verifiedAt: new Date(),
+      sendTo: null,
+      template: WorkflowTemplates.REMINDER,
+      reminderBody: null,
+      emailSubject: null,
+      sender: null,
+      includeCalendarEvent: false,
+      numberVerificationPending: false,
+      numberRequired: false,
+    };
+
+    test("should send to organizer and team members for ROUND_ROBIN scheduling type", async () => {
+      // Note: For ROUND_ROBIN, the CalendarEventBuilder filters team members to only include
+      // those assigned to the booking. EmailWorkflowService sends to all team members in evt.team.members.
+      const mockEvt: Partial<CalendarEvent> = {
+        ...baseMockEvt,
+        schedulingType: SchedulingType.ROUND_ROBIN,
+        team: {
+          id: 1,
+          name: "Test Team",
+          members: [
+            {
+              id: 1,
+              name: "Team Member 1",
+              email: "team1@example.com",
+              timeZone: "UTC",
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              language: { locale: "en", translate: (() => "") as any },
+            },
+            {
+              id: 2,
+              name: "Team Member 2",
+              email: "team2@example.com",
+              timeZone: "UTC",
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              language: { locale: "en", translate: (() => "") as any },
+            },
+          ],
+        },
+      };
+
+      const result = await emailWorkflowService.generateParametersToBuildEmailWorkflowContent({
+        evt: mockEvt as CalendarEvent,
+        workflowStep: mockWorkflowStep,
+        workflow: { userId: 1 },
+        commonScheduleFunctionParams: mockCommonScheduleFunctionParams,
+        hideBranding: false,
+      });
+
+      // EmailWorkflowService sends to organizer + all team members in evt.team.members
+      // The filtering of team members happens in CalendarEventBuilder, not here
+      expect(result.sendTo).toContain("organizer@example.com");
+      expect(result.sendTo).toContain("team1@example.com");
+      expect(result.sendTo).toContain("team2@example.com");
+      expect(result.sendTo.length).toBe(3);
+    });
+
+    test("should send to organizer and team members for COLLECTIVE scheduling type", async () => {
+      const mockEvt: Partial<CalendarEvent> = {
+        ...baseMockEvt,
+        schedulingType: SchedulingType.COLLECTIVE,
+        team: {
+          id: 1,
+          name: "Test Team",
+          members: [
+            {
+              id: 1,
+              name: "Team Member 1",
+              email: "team1@example.com",
+              timeZone: "UTC",
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              language: { locale: "en", translate: (() => "") as any },
+            },
+            {
+              id: 2,
+              name: "Team Member 2",
+              email: "team2@example.com",
+              timeZone: "UTC",
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              language: { locale: "en", translate: (() => "") as any },
+            },
+          ],
+        },
+      };
+
+      const result = await emailWorkflowService.generateParametersToBuildEmailWorkflowContent({
+        evt: mockEvt as CalendarEvent,
+        workflowStep: mockWorkflowStep,
+        workflow: { userId: 1 },
+        commonScheduleFunctionParams: mockCommonScheduleFunctionParams,
+        hideBranding: false,
+      });
+
+      expect(result.sendTo).toContain("organizer@example.com");
+      expect(result.sendTo).toContain("team1@example.com");
+      expect(result.sendTo).toContain("team2@example.com");
+      expect(result.sendTo.length).toBe(3);
+    });
+
+    test("should send to organizer only when team is undefined for COLLECTIVE", async () => {
+      const mockEvt: Partial<CalendarEvent> = {
+        ...baseMockEvt,
+        schedulingType: SchedulingType.COLLECTIVE,
+        team: undefined,
+      } as Partial<CalendarEvent>;
+
+      const result = await emailWorkflowService.generateParametersToBuildEmailWorkflowContent({
+        evt: mockEvt as CalendarEvent,
+        workflowStep: mockWorkflowStep,
+        workflow: { userId: 1 },
+        commonScheduleFunctionParams: mockCommonScheduleFunctionParams,
+        hideBranding: false,
+      });
+
+      expect(result.sendTo).toEqual(["organizer@example.com"]);
+      expect(result.sendTo.length).toBe(1);
+    });
+
+    test("should send to organizer only when team members array is empty for COLLECTIVE", async () => {
+      const mockEvt: Partial<CalendarEvent> = {
+        ...baseMockEvt,
+        schedulingType: SchedulingType.COLLECTIVE,
+        team: {
+          id: 1,
+          name: "Test Team",
+          members: [],
+        },
+      };
+
+      const result = await emailWorkflowService.generateParametersToBuildEmailWorkflowContent({
+        evt: mockEvt as CalendarEvent,
+        workflowStep: mockWorkflowStep,
+        workflow: { userId: 1 },
+        commonScheduleFunctionParams: mockCommonScheduleFunctionParams,
+        hideBranding: false,
+      });
+
+      expect(result.sendTo).toEqual(["organizer@example.com"]);
+      expect(result.sendTo.length).toBe(1);
+    });
+
+    test("should send to organizer only for other scheduling types (e.g., null)", async () => {
+      const mockEvt: Partial<CalendarEvent> = {
+        ...baseMockEvt,
+        schedulingType: null,
+        team: {
+          id: 1,
+          name: "Test Team",
+          members: [
+            {
+              id: 1,
+              name: "Team Member 1",
+              email: "team1@example.com",
+              timeZone: "UTC",
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              language: { locale: "en", translate: (() => "") as any },
+            },
+          ],
+        },
+      } as Partial<CalendarEvent>;
+
+      const result = await emailWorkflowService.generateParametersToBuildEmailWorkflowContent({
+        evt: mockEvt as CalendarEvent,
+        workflowStep: mockWorkflowStep,
+        workflow: { userId: 1 },
+        commonScheduleFunctionParams: mockCommonScheduleFunctionParams,
+        hideBranding: false,
+      });
+
+      expect(result.sendTo).toEqual(["organizer@example.com"]);
+      expect(result.sendTo.length).toBe(1);
+    });
+  });
+
+  describe("generateParametersToBuildEmailWorkflowContent - Form Data", () => {
+    const mockCommonScheduleFunctionParams = {
+      triggerEvent: WorkflowTriggerEvents.FORM_SUBMITTED,
+      timeSpan: {
+        time: null,
+        timeUnit: null,
+      },
+      workflowStepId: 1,
+      template: WorkflowTemplates.REMINDER,
+      userId: 1,
+      teamId: null,
+      seatReferenceUid: undefined,
+      verifiedAt: new Date(),
+      creditCheckFn: vi.fn().mockResolvedValue(true),
+    };
+
+    const mockFormData = {
+      responses: {
+        "contact person": {
+          value: "Jane Smith",
+          response: "Jane Smith",
+        },
+        email: {
+          value: "jane@example.com",
+          response: "jane@example.com",
+        },
+      },
+      routedEventTypeId: null,
+      user: {
+        email: "user@test.com",
+        timeFormat: 12,
+        locale: "en",
+      },
+    };
+
+    test("should work with EMAIL_ADDRESS action and formData (no evt)", async () => {
+      const mockWorkflowStep = {
+        id: 1,
+        action: WorkflowActions.EMAIL_ADDRESS,
+        verifiedAt: new Date(),
+        sendTo: "recipient@example.com",
+        template: WorkflowTemplates.REMINDER,
+        reminderBody: null,
+        emailSubject: null,
+        sender: null,
+        includeCalendarEvent: false,
+        numberVerificationPending: false,
+        numberRequired: false,
+      };
+
+      const result = await emailWorkflowService.generateParametersToBuildEmailWorkflowContent({
+        formData: mockFormData,
+        workflowStep: mockWorkflowStep,
+        workflow: { userId: 1 },
+        commonScheduleFunctionParams: mockCommonScheduleFunctionParams,
+        hideBranding: false,
+      });
+
+      expect(result.sendTo).toEqual(["recipient@example.com"]);
+      expect(result.formData).toEqual(mockFormData);
+      expect(result.evt).toBeUndefined();
+    });
+
+    test("should work with EMAIL_ATTENDEE action and formData (no evt)", async () => {
+      const mockWorkflowStep = {
+        id: 1,
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        verifiedAt: new Date(),
+        sendTo: null,
+        template: WorkflowTemplates.REMINDER,
+        reminderBody: null,
+        emailSubject: null,
+        sender: null,
+        includeCalendarEvent: false,
+        numberVerificationPending: false,
+        numberRequired: false,
+      };
+
+      const result = await emailWorkflowService.generateParametersToBuildEmailWorkflowContent({
+        formData: mockFormData,
+        workflowStep: mockWorkflowStep,
+        workflow: { userId: 1 },
+        commonScheduleFunctionParams: mockCommonScheduleFunctionParams,
+        hideBranding: false,
+      });
+
+      // Should extract email from formData responses
+      expect(result.sendTo).toEqual(["jane@example.com"]);
+      expect(result.formData).toEqual(mockFormData);
+      expect(result.evt).toBeUndefined();
+    });
+
+    test("should throw error if neither evt nor formData is provided", async () => {
+      const mockWorkflowStep = {
+        id: 1,
+        action: WorkflowActions.EMAIL_ADDRESS,
+        verifiedAt: new Date(),
+        sendTo: "recipient@example.com",
+        template: WorkflowTemplates.REMINDER,
+        reminderBody: null,
+        emailSubject: null,
+        sender: null,
+        includeCalendarEvent: false,
+        numberVerificationPending: false,
+        numberRequired: false,
+      };
+
+      await expect(
+        emailWorkflowService.generateParametersToBuildEmailWorkflowContent({
+          workflowStep: mockWorkflowStep,
+          workflow: { userId: 1 },
+          commonScheduleFunctionParams: mockCommonScheduleFunctionParams,
+          hideBranding: false,
+        })
+      ).rejects.toThrow("Either evt or formData must be provided");
+    });
+  });
+
+  describe("generateEmailPayloadForEvtWorkflow - ICS attachment", () => {
+    const mockBookingInfo = {
+      uid: "booking-123",
+      bookerUrl: "https://cal.com",
+      title: "Test Meeting",
+      startTime: "2024-12-01T10:00:00Z",
+      endTime: "2024-12-01T11:00:00Z",
+      organizer: {
+        name: "Organizer Name",
+        email: "organizer@example.com",
+        timeZone: "UTC",
+        language: { locale: "en" },
+        timeFormat: "h:mma",
+      },
+      attendees: [
+        {
+          name: "Attendee Name",
+          email: "attendee@example.com",
+          timeZone: "UTC",
+          language: { locale: "en" },
+        },
+      ],
+    };
+
+    test("should NOT include ICS attachment for BOOKING_REQUESTED trigger even when includeCalendarEvent is true", async () => {
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Test Body",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: true,
+        triggerEvent: WorkflowTriggerEvents.BOOKING_REQUESTED,
+      });
+
+      expect(result.attachments).toBeUndefined();
+    });
+
+    test("should include ICS attachment for BEFORE_EVENT trigger when includeCalendarEvent is true", async () => {
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Test Body",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: true,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.attachments).toBeDefined();
+      expect(result.attachments).toHaveLength(1);
+      expect(result.attachments?.[0].filename).toBe("event.ics");
+      expect(result.attachments?.[0].contentType).toBe("text/calendar; charset=UTF-8; method=REQUEST");
+    });
+
+    test("should NOT include ICS attachment when includeCalendarEvent is false", async () => {
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Test Body",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.attachments).toBeUndefined();
+    });
+  });
+
+  describe("generateEmailPayloadForEvtWorkflow - Seated event ICS attendee filtering", () => {
+    const mockSeatedBookingInfo = {
+      uid: "booking-seated-123",
+      bookerUrl: "https://cal.com",
+      title: "Seated Event Meeting",
+      startTime: "2024-12-01T10:00:00Z",
+      endTime: "2024-12-01T11:00:00Z",
+      organizer: {
+        name: "Organizer Name",
+        email: "organizer@example.com",
+        timeZone: "UTC",
+        language: { locale: "en" },
+        timeFormat: "h:mma",
+      },
+      attendees: [
+        {
+          name: "Attendee One",
+          email: "attendee1@example.com",
+          timeZone: "UTC",
+          language: { locale: "en" },
+        },
+        {
+          name: "Attendee Two",
+          email: "attendee2@example.com",
+          timeZone: "America/New_York",
+          language: { locale: "en" },
+        },
+        {
+          name: "Attendee Three",
+          email: "attendee3@example.com",
+          timeZone: "Europe/London",
+          language: { locale: "en" },
+        },
+      ],
+    };
+
+    test("should only include target attendee in ICS for seated event with EMAIL_ATTENDEE", async () => {
+      const generateIcsString = (await import("@calcom/emails/lib/generateIcsString")).default;
+
+      vi.mocked(mockBookingSeatRepository.getByReferenceUidWithAttendeeDetails).mockResolvedValue({
+        attendee: {
+          name: "Attendee Two",
+          email: "attendee2@example.com",
+          phoneNumber: null,
+          timeZone: "America/New_York",
+          locale: "en",
+        },
+      });
+
+      await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockSeatedBookingInfo,
+        sendTo: ["attendee2@example.com"],
+        seatReferenceUid: "seat-ref-123",
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Test Body",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: true,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      // Verify generateIcsString was called with only the target attendee
+      expect(generateIcsString).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: expect.objectContaining({
+            attendees: expect.arrayContaining([expect.objectContaining({ email: "attendee2@example.com" })]),
+          }),
+        })
+      );
+
+      // Verify other attendees are NOT in the ICS
+      const icsCall = vi.mocked(generateIcsString).mock.calls[0][0];
+      expect(icsCall.event.attendees).toHaveLength(1);
+      expect(icsCall.event.attendees[0].email).toBe("attendee2@example.com");
+    });
+
+    test("should include all attendees in ICS for non-seated event with EMAIL_ATTENDEE", async () => {
+      const generateIcsString = (await import("@calcom/emails/lib/generateIcsString")).default;
+
+      await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockSeatedBookingInfo,
+        sendTo: ["attendee1@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Test Body",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: true,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+        // No seatReferenceUid = non-seated event
+      });
+
+      const icsCall = vi.mocked(generateIcsString).mock.calls[0][0];
+      expect(icsCall.event.attendees).toHaveLength(3);
+    });
+
+    test("should include all attendees in ICS for seated event with EMAIL_HOST", async () => {
+      const generateIcsString = (await import("@calcom/emails/lib/generateIcsString")).default;
+
+      await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockSeatedBookingInfo,
+        sendTo: ["organizer@example.com"],
+        seatReferenceUid: "seat-ref-123",
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Test Body",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_HOST,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: true,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      // EMAIL_HOST should still include all attendees even for seated events
+      const icsCall = vi.mocked(generateIcsString).mock.calls[0][0];
+      expect(icsCall.event.attendees).toHaveLength(3);
+    });
+  });
+
+  describe("generateEmailPayloadForEvtWorkflow - Platform URL handling", () => {
+    const baseBookingInfo = {
+      uid: "booking-123",
+      bookerUrl: "https://cal.com",
+      title: "Test Meeting",
+      startTime: "2024-12-01T10:00:00Z",
+      endTime: "2024-12-01T11:00:00Z",
+      organizer: {
+        name: "Organizer Name",
+        email: "organizer@example.com",
+        timeZone: "UTC",
+        language: { locale: "en" },
+        timeFormat: "h:mma",
+        username: "organizer-user",
+      },
+      attendees: [
+        {
+          name: "Attendee Name",
+          email: "attendee@example.com",
+          timeZone: "UTC",
+          language: { locale: "en" },
+        },
+      ],
+      eventType: {
+        slug: "test-event",
+        recurringEvent: null,
+      },
+    };
+
+    test("should use platform cancel URL when platformClientId and platformCancelUrl are provided", async () => {
+      const mockBookingInfoWithPlatform = {
+        ...baseBookingInfo,
+        platformClientId: "platform-client-123",
+        platformCancelUrl: "https://platform.example.com/cancel",
+        platformRescheduleUrl: "https://platform.example.com/reschedule",
+      };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoWithPlatform,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Cancel here: {CANCEL_URL}",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      // The cancel link should use the platform URL
+      expect(result.html).toContain("https://platform.example.com/cancel/booking-123");
+      expect(result.html).toContain("slug=test-event");
+      expect(result.html).toContain("username=organizer-user");
+      expect(result.html).toContain("cancel=true");
+    });
+
+    test("should use platform reschedule URL when platformClientId and platformRescheduleUrl are provided", async () => {
+      const mockBookingInfoWithPlatform = {
+        ...baseBookingInfo,
+        platformClientId: "platform-client-123",
+        platformCancelUrl: "https://platform.example.com/cancel",
+        platformRescheduleUrl: "https://platform.example.com/reschedule",
+      };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoWithPlatform,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Reschedule here: {RESCHEDULE_URL}",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      // The reschedule link should use the platform URL
+      expect(result.html).toContain("https://platform.example.com/reschedule/booking-123");
+      expect(result.html).toContain("slug=test-event");
+      expect(result.html).toContain("username=organizer-user");
+      expect(result.html).toContain("reschedule=true");
+    });
+
+    test("should use standard bookerUrl when platformClientId is not provided", async () => {
+      const mockBookingInfoWithoutPlatform = {
+        ...baseBookingInfo,
+        platformClientId: null,
+        platformCancelUrl: null,
+        platformRescheduleUrl: null,
+      };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoWithoutPlatform,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Cancel: {CANCEL_URL} Reschedule: {RESCHEDULE_URL}",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      // Should use standard bookerUrl pattern
+      expect(result.html).toContain("https://cal.com/booking/booking-123?cancel=true");
+      expect(result.html).toContain("https://cal.com/reschedule/booking-123");
+      // Should NOT contain platform URLs
+      expect(result.html).not.toContain("platform.example.com");
+    });
+
+    test("should include teamId in platform cancel URL when team is provided", async () => {
+      const mockBookingInfoWithTeam = {
+        ...baseBookingInfo,
+        platformClientId: "platform-client-123",
+        platformCancelUrl: "https://platform.example.com/cancel",
+        platformRescheduleUrl: "https://platform.example.com/reschedule",
+        team: {
+          id: 42,
+          name: "Test Team",
+          members: [],
+        },
+      };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoWithTeam,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Cancel here: {CANCEL_URL}",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).toContain("teamId=42");
+    });
+
+    test("should include teamId in platform reschedule URL when team is provided", async () => {
+      const mockBookingInfoWithTeam = {
+        ...baseBookingInfo,
+        platformClientId: "platform-client-123",
+        platformCancelUrl: "https://platform.example.com/cancel",
+        platformRescheduleUrl: "https://platform.example.com/reschedule",
+        team: {
+          id: 42,
+          name: "Test Team",
+          members: [],
+        },
+      };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoWithTeam,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Reschedule here: {RESCHEDULE_URL}",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).toContain("teamId=42");
+    });
+
+    test("should include seatReferenceUid in platform cancel URL for seated events", async () => {
+      const mockBookingInfoWithPlatform = {
+        ...baseBookingInfo,
+        platformClientId: "platform-client-123",
+        platformCancelUrl: "https://platform.example.com/cancel",
+        platformRescheduleUrl: "https://platform.example.com/reschedule",
+      };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoWithPlatform,
+        sendTo: ["attendee@example.com"],
+        seatReferenceUid: "seat-ref-456",
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Cancel here: {CANCEL_URL}",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).toContain("seatReferenceUid=seat-ref-456");
+    });
+
+    test("should use seatReferenceUid as uid in platform reschedule URL for seated events", async () => {
+      const mockBookingInfoWithPlatform = {
+        ...baseBookingInfo,
+        platformClientId: "platform-client-123",
+        platformCancelUrl: "https://platform.example.com/cancel",
+        platformRescheduleUrl: "https://platform.example.com/reschedule",
+      };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoWithPlatform,
+        sendTo: ["attendee@example.com"],
+        seatReferenceUid: "seat-ref-456",
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Reschedule here: {RESCHEDULE_URL}",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      // For seated events with EMAIL_ATTENDEE action, the reschedule URL should use seatReferenceUid
+      expect(result.html).toContain("https://platform.example.com/reschedule/seat-ref-456");
+    });
+
+    test("should include allRemainingBookings=true for recurring events in platform cancel URL", async () => {
+      const mockBookingInfoWithRecurring = {
+        ...baseBookingInfo,
+        platformClientId: "platform-client-123",
+        platformCancelUrl: "https://platform.example.com/cancel",
+        platformRescheduleUrl: "https://platform.example.com/reschedule",
+        eventType: {
+          slug: "test-event",
+          recurringEvent: { freq: 2, count: 5, interval: 1 },
+        },
+      };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoWithRecurring,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Cancel here: {CANCEL_URL}",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).toContain("allRemainingBookings=true");
+    });
+
+    test("should include allRemainingBookings=false for non-recurring events in platform cancel URL", async () => {
+      const mockBookingInfoNonRecurring = {
+        ...baseBookingInfo,
+        platformClientId: "platform-client-123",
+        platformCancelUrl: "https://platform.example.com/cancel",
+        platformRescheduleUrl: "https://platform.example.com/reschedule",
+        eventType: {
+          slug: "test-event",
+          recurringEvent: null,
+        },
+      };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoNonRecurring,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Cancel here: {CANCEL_URL}",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).toContain("allRemainingBookings=false");
+    });
+
+    test("should include allRemainingBookings=true for recurring events in standard cancel URL", async () => {
+      const mockBookingInfoWithRecurring = {
+        ...baseBookingInfo,
+        platformClientId: null,
+        platformCancelUrl: null,
+        platformRescheduleUrl: null,
+        eventType: {
+          slug: "test-event",
+          recurringEvent: { freq: 2, count: 5, interval: 1 },
+        },
+      };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoWithRecurring,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Cancel here: {CANCEL_URL}",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      // Standard cancel URL should include allRemainingBookings=true for recurring events
+      expect(result.html).toContain("https://cal.com/booking/booking-123");
+      expect(result.html).toContain("allRemainingBookings=true");
+    });
+
+    test("should include allRemainingBookings=false for non-recurring events in standard cancel URL", async () => {
+      const mockBookingInfoNonRecurring = {
+        ...baseBookingInfo,
+        platformClientId: null,
+        platformCancelUrl: null,
+        platformRescheduleUrl: null,
+        eventType: {
+          slug: "test-event",
+          recurringEvent: null,
+        },
+      };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoNonRecurring,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "Cancel here: {CANCEL_URL}",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      // Standard cancel URL should include allRemainingBookings=false for non-recurring events
+      expect(result.html).toContain("https://cal.com/booking/booking-123");
+      expect(result.html).toContain("allRemainingBookings=false");
+    });
+  });
+
+  describe("generateEmailPayloadForEvtWorkflow - Auto Translation", () => {
+    const mockBookingInfo = {
+      uid: "booking-123",
+      bookerUrl: "https://cal.com",
+      title: "Test Meeting",
+      startTime: "2024-12-01T10:00:00Z",
+      endTime: "2024-12-01T11:00:00Z",
+      organizer: {
+        name: "Organizer Name",
+        email: "organizer@example.com",
+        timeZone: "UTC",
+        language: { locale: "en" },
+        timeFormat: "h:mma",
+      },
+      attendees: [
+        {
+          name: "Spanish Attendee",
+          email: "attendee@example.com",
+          timeZone: "Europe/Madrid",
+          language: { locale: "es" },
+        },
+      ],
+    };
+
+    beforeEach(() => {
+      vi.mocked(mockTranslationService.getWorkflowStepTranslation).mockReset();
+    });
+
+    test("should use translated content when autoTranslateEnabled is true and translation exists", async () => {
+      vi.mocked(mockTranslationService.getWorkflowStepTranslation).mockResolvedValue({
+        translatedBody: "Cuerpo traducido",
+        translatedSubject: "Asunto traducido",
+      });
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Original Subject",
+        emailBody: "Original Body",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+        workflowStepId: 123,
+        autoTranslateEnabled: true,
+        sourceLocale: "en",
+      });
+
+      expect(mockTranslationService.getWorkflowStepTranslation).toHaveBeenCalledTimes(1);
+      expect(result.subject).toBe("Asunto traducido");
+      expect(result.html).toContain("Cuerpo traducido");
+    });
+
+    test("should use original content when autoTranslateEnabled is false", async () => {
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Original Subject",
+        emailBody: "Original Body",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+        workflowStepId: 123,
+        autoTranslateEnabled: false,
+      });
+
+      expect(mockTranslationService.getWorkflowStepTranslation).not.toHaveBeenCalled();
+      expect(result.subject).toBe("Original Subject");
+    });
+
+    test("should fallback to original content when translation not found", async () => {
+      vi.mocked(mockTranslationService.getWorkflowStepTranslation).mockResolvedValue({
+        translatedBody: null,
+        translatedSubject: null,
+      });
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Original Subject",
+        emailBody: "Original Body",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+        workflowStepId: 123,
+        autoTranslateEnabled: true,
+        sourceLocale: "en",
+      });
+
+      expect(mockTranslationService.getWorkflowStepTranslation).toHaveBeenCalledTimes(1);
+      expect(result.subject).toBe("Original Subject");
+    });
+
+    test("should not translate for non-attendee actions", async () => {
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["organizer@example.com"],
+        hideBranding: false,
+        emailSubject: "Original Subject",
+        emailBody: "Original Body",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_HOST,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+        workflowStepId: 123,
+        autoTranslateEnabled: true,
+        sourceLocale: "en",
+      });
+
+      expect(mockTranslationService.getWorkflowStepTranslation).not.toHaveBeenCalled();
+      expect(result.subject).toBe("Original Subject");
+    });
+  });
+
+  describe("generateEmailPayloadForEvtWorkflow - Reschedule and Cancel links in REMINDER template", () => {
+    const mockBookingInfo = {
+      uid: "booking-reminder-123",
+      bookerUrl: "https://cal.com",
+      title: "Reminder Test Meeting",
+      startTime: "2024-12-01T10:00:00Z",
+      endTime: "2024-12-01T11:00:00Z",
+      organizer: {
+        name: "Organizer Name",
+        email: "organizer@example.com",
+        timeZone: "UTC",
+        language: { locale: "en" },
+        timeFormat: TimeFormat.TWELVE_HOUR,
+      },
+      attendees: [
+        {
+          name: "Attendee Name",
+          email: "attendee@example.com",
+          timeZone: "UTC",
+          language: { locale: "en" },
+        },
+      ],
+      team: { id: 1, name: "Test Team", members: [] },
+    };
+
+    beforeEach(() => {
+      mockCheckIfTeamHasFeature.mockResolvedValue(true);
+    });
+
+    test("should include reschedule and cancel links in REMINDER template for EMAIL_ATTENDEE", async () => {
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "",
+        emailBody: "",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).toContain("/reschedule/booking-reminder-123");
+      expect(result.html).toContain("/booking/booking-reminder-123?cancel=true");
+      expect(result.html).toContain("Need to make a change?");
+    });
+
+    test("should include reschedule and cancel links in REMINDER template for EMAIL_HOST", async () => {
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["organizer@example.com"],
+        hideBranding: false,
+        emailSubject: "",
+        emailBody: "",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_HOST,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).toContain("/reschedule/booking-reminder-123");
+      expect(result.html).toContain("/booking/booking-reminder-123?cancel=true");
+    });
+
+    test("should include cancelledBy param in cancel link for EMAIL_ATTENDEE", async () => {
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "",
+        emailBody: "",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).toContain("cancelledBy=attendee%40example.com");
+    });
+
+    test("should include rescheduledBy param in reschedule link for EMAIL_ATTENDEE", async () => {
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "",
+        emailBody: "",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).toContain("rescheduledBy=attendee%40example.com");
+    });
+
+    test("should include seatReferenceUid in links for seated events", async () => {
+      vi.mocked(mockBookingSeatRepository.getByReferenceUidWithAttendeeDetails).mockResolvedValue({
+        attendee: {
+          name: "Attendee Name",
+          email: "attendee@example.com",
+          phoneNumber: null,
+          timeZone: "UTC",
+          locale: "en",
+        },
+      });
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        seatReferenceUid: "seat-ref-456",
+        hideBranding: false,
+        emailSubject: "",
+        emailBody: "",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).toContain("seatReferenceUid=seat-ref-456");
+    });
+
+    test("should NOT include reschedule link when disableRescheduling is true", async () => {
+      mockFindEventTypeDisableFlagsByUid.mockResolvedValueOnce({
+        eventType: { disableCancelling: false, disableRescheduling: true },
+      });
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "",
+        emailBody: "",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).not.toContain("/reschedule/");
+      expect(result.html).toContain("/booking/booking-reminder-123?cancel=true");
+    });
+
+    test("should NOT include cancel link when disableCancelling is true", async () => {
+      mockFindEventTypeDisableFlagsByUid.mockResolvedValueOnce({
+        eventType: { disableCancelling: true, disableRescheduling: false },
+      });
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "",
+        emailBody: "",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).toContain("/reschedule/booking-reminder-123");
+      expect(result.html).not.toContain("cancel=true");
+    });
+
+    test("should NOT include any links when both are disabled", async () => {
+      mockFindEventTypeDisableFlagsByUid.mockResolvedValueOnce({
+        eventType: { disableCancelling: true, disableRescheduling: true },
+      });
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "",
+        emailBody: "",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).not.toContain("/reschedule/");
+      expect(result.html).not.toContain("cancel=true");
+      expect(result.html).not.toContain("Need to make a change?");
+    });
+
+    test("should NOT include links when workflow-reminder-links feature flag is disabled", async () => {
+      mockCheckIfTeamHasFeature.mockResolvedValue(false);
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "",
+        emailBody: "",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).not.toContain("/reschedule/");
+      expect(result.html).not.toContain("cancel=true");
+      expect(result.html).not.toContain("Need to make a change?");
+    });
+
+    test("should NOT include links when no team is associated", async () => {
+      const bookingWithoutTeam = { ...mockBookingInfo, team: undefined };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: bookingWithoutTeam,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "",
+        emailBody: "",
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      expect(result.html).not.toContain("/reschedule/");
+      expect(result.html).not.toContain("cancel=true");
+      expect(mockCheckIfTeamHasFeature).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("generateEmailPayloadForEvtWorkflow - Cal Video meeting URL", () => {
+    const mockBookingInfoWithCalVideo = {
+      uid: "booking-cal-video-123",
+      bookerUrl: "https://cal.com",
+      title: "Test Meeting with Cal Video",
+      startTime: "2024-12-01T10:00:00Z",
+      endTime: "2024-12-01T11:00:00Z",
+      organizer: {
+        name: "Organizer Name",
+        email: "organizer@example.com",
+        timeZone: "UTC",
+        language: { locale: "en" },
+        timeFormat: TimeFormat.TWELVE_HOUR,
+      },
+      attendees: [
+        {
+          name: "Attendee Name",
+          email: "attendee@example.com",
+          timeZone: "UTC",
+          language: { locale: "en" },
+        },
+      ],
+      videoCallData: {
+        type: "daily_video",
+        url: "https://test-org.daily.co/test-room-name",
+        id: "test-room-name",
+        password: "test-password",
+      },
+      location: "Cal Video",
+    };
+
+    test("should use Cal.com video URL instead of daily.co URL for REMINDER template when using Cal video", async () => {
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoWithCalVideo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "", // Empty body with REMINDER template triggers REMINDER template
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      // The meetingUrl should NOT contain daily.co
+      expect(result.html).not.toContain("daily.co");
+      // The meetingUrl should contain the Cal.com video URL format
+      expect(result.html).toContain("/video/booking-cal-video-123");
+    });
+
+    test("should use Cal.com video URL instead of daily.co URL for custom template when using Cal video", async () => {
+      const customEmailBody = "Join the meeting at {MEETING_URL}";
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoWithCalVideo,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: customEmailBody,
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.CUSTOM,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      // The meetingUrl should NOT contain daily.co
+      expect(result.html).not.toContain("daily.co");
+      // The meetingUrl should contain the Cal.com video URL format
+      expect(result.html).toContain("/video/booking-cal-video-123");
+    });
+
+    test("should use Cal.com video URL format when videoCallData.url contains daily.co domain", async () => {
+      const mockBookingInfoWithDailyCoUrl = {
+        ...mockBookingInfoWithCalVideo,
+        videoCallData: {
+          type: "daily_video",
+          url: "https://some-org.daily.co/another-room-name",
+          id: "another-room-name",
+          password: "test-password",
+        },
+      };
+
+      const result = await emailWorkflowService.generateEmailPayloadForEvtWorkflow({
+        evt: mockBookingInfoWithDailyCoUrl,
+        sendTo: ["attendee@example.com"],
+        hideBranding: false,
+        emailSubject: "Test Subject",
+        emailBody: "", // Empty body with REMINDER template triggers REMINDER template
+        sender: "Cal.com",
+        action: WorkflowActions.EMAIL_ATTENDEE,
+        template: WorkflowTemplates.REMINDER,
+        includeCalendarEvent: false,
+        triggerEvent: WorkflowTriggerEvents.BEFORE_EVENT,
+      });
+
+      // Even though videoCallData.url contains daily.co, the meetingUrl should NOT contain it
+      expect(result.html).not.toContain("daily.co");
+      expect(result.html).not.toContain("some-org.daily.co");
+      expect(result.html).not.toContain("another-room-name");
+      // Should use Cal.com video URL instead
+      expect(result.html).toContain("/video/booking-cal-video-123");
+    });
+  });
+});
