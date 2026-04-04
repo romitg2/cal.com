@@ -1,19 +1,19 @@
-import { v4 } from "uuid";
-
 import { DailyLocationType, getHumanReadableLocationValue } from "@calcom/app-store/locations";
 import { selectOOOEntries } from "@calcom/app-store/zapier/api/subscriptions/listOOOEntries";
 import dayjs from "@calcom/dayjs";
 import { getCalEventResponses } from "@calcom/features/bookings/lib/getCalEventResponses";
+import { getWebhookFeature } from "@calcom/features/di/webhooks/containers/webhook";
 import tasker from "@calcom/features/tasker";
+import { getTranslation } from "@calcom/i18n/server";
 import logger from "@calcom/lib/logger";
 import { safeStringify } from "@calcom/lib/safeStringify";
 import { withReporting } from "@calcom/lib/sentryWrapper";
 import { logBlockedSSRFAttempt, validateUrlForSSRF } from "@calcom/lib/ssrfProtection";
-import { getTranslation } from "@calcom/i18n/server";
 import { prisma } from "@calcom/prisma";
-import type { Prisma, Webhook, Booking, ApiKey } from "@calcom/prisma/client";
+import type { ApiKey, Booking, Webhook } from "@calcom/prisma/client";
 import { BookingStatus, WebhookTriggerEvents } from "@calcom/prisma/enums";
 import { bookingMetadataSchema } from "@calcom/prisma/zod-utils";
+import { v4 } from "uuid";
 import { DEFAULT_WEBHOOK_VERSION, type WebhookVersion } from "./interface/IWebhookRepository";
 
 const SCHEDULING_TRIGGER: WebhookTriggerEvents[] = [
@@ -302,24 +302,15 @@ export async function scheduleTrigger({
   if (isDryRun) return;
   try {
     const payload = JSON.stringify({ triggerEvent, ...booking });
+    const repository = getWebhookFeature().repository;
 
-    await prisma.webhookScheduledTriggers.create({
-      data: {
-        payload,
-        appId: subscriber.appId,
-        startAfter: triggerEvent === WebhookTriggerEvents.MEETING_ENDED ? booking.endTime : booking.startTime,
-        subscriberUrl,
-        webhook: {
-          connect: {
-            id: subscriber.id,
-          },
-        },
-        booking: {
-          connect: {
-            id: booking.id,
-          },
-        },
-      },
+    await repository.createScheduledTrigger({
+      payload,
+      appId: subscriber.appId,
+      startAfter: triggerEvent === WebhookTriggerEvents.MEETING_ENDED ? booking.endTime : booking.startTime,
+      subscriberUrl,
+      webhookId: subscriber.id,
+      bookingId: booking.id,
     });
   } catch (error) {
     console.error("Error cancelling scheduled jobs", error);
@@ -345,38 +336,18 @@ async function _deleteWebhookScheduledTriggers({
 }) {
   if (isDryRun) return;
   try {
+    const repository = getWebhookFeature().repository;
+
     if (appId && (userId || teamId)) {
-      const where: Prisma.BookingWhereInput = {};
-      if (userId) {
-        where.eventType = { userId };
-      } else {
-        where.eventType = { teamId };
-      }
-      await prisma.webhookScheduledTriggers.deleteMany({
-        where: {
-          appId: appId,
-          booking: where,
-        },
+      await repository.deleteScheduledTriggersByAppIdAndOwner({
+        appId,
+        userId,
+        teamId,
       });
-    } else {
-      if (booking) {
-        await prisma.webhookScheduledTriggers.deleteMany({
-          where: {
-            bookingId: booking.id,
-          },
-        });
-      } else if (webhookId) {
-        const where: Prisma.WebhookScheduledTriggersWhereInput = { webhookId: webhookId };
-
-        if (triggerEvent) {
-          const shouldContain = `"triggerEvent":"${triggerEvent}"`;
-          where.payload = { contains: shouldContain };
-        }
-
-        await prisma.webhookScheduledTriggers.deleteMany({
-          where,
-        });
-      }
+    } else if (booking) {
+      await repository.deleteScheduledTriggersByBookingId(booking.id);
+    } else if (webhookId) {
+      await repository.deleteScheduledTriggersByWebhookId(webhookId, triggerEvent);
     }
   } catch (error) {
     console.error("Error deleting webhookScheduledTriggers ", error);

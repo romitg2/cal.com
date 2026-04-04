@@ -1,47 +1,23 @@
 import dayjs from "@calcom/dayjs";
+import { getWebhookFeature } from "@calcom/features/di/webhooks/containers/webhook";
 import logger from "@calcom/lib/logger";
 import type { PrismaClient } from "@calcom/prisma";
-
+import { prisma } from "@calcom/prisma";
 import { DEFAULT_WEBHOOK_VERSION } from "./interface/IWebhookRepository";
 import { createWebhookSignature, jsonParse } from "./sendPayload";
 
-export async function handleWebhookScheduledTriggers(prisma: PrismaClient) {
-  await prisma.webhookScheduledTriggers.deleteMany({
-    where: {
-      startAfter: {
-        lte: dayjs().subtract(1, "day").toDate(),
-      },
-    },
-  });
-  // get jobs that should be run
-  const jobsToRun = await prisma.webhookScheduledTriggers.findMany({
-    where: {
-      startAfter: {
-        lte: dayjs().toDate(),
-      },
-    },
-    select: {
-      id: true,
-      jobName: true,
-      payload: true,
-      subscriberUrl: true,
-      webhook: {
-        select: {
-          secret: true,
-          version: true,
-        },
-      },
-    },
-  });
+export async function handleWebhookScheduledTriggers(_prisma?: PrismaClient) {
+  const repository = getWebhookFeature().repository;
+
+  await repository.deleteOldScheduledTriggers(dayjs().subtract(1, "day").toDate());
+
+  const jobsToRun = await repository.findScheduledTriggersReadyToRun(dayjs().toDate());
 
   const fetchPromises: Promise<Response | void>[] = [];
 
-  // run jobs
   for (const job of jobsToRun) {
-    // Fetch the webhook configuration so that we can get the secret.
     let webhook = job.webhook;
 
-    // only needed to support old jobs that don't have the webhook relationship yet
     if (!webhook && job.jobName) {
       const [appId, subscriberId] = job.jobName.split("_");
       try {
@@ -68,19 +44,13 @@ export async function handleWebhookScheduledTriggers(prisma: PrismaClient) {
         method: "POST",
         body: job.payload,
         headers,
-        // Avoid following redirect
         redirect: "manual",
       }).catch((error) => {
         console.error(`Webhook trigger for subscriber url ${job.subscriberUrl} failed with error: ${error}`);
       })
     );
 
-    // clean finished job
-    await prisma.webhookScheduledTriggers.delete({
-      where: {
-        id: job.id,
-      },
-    });
+    await repository.deleteScheduledTriggerById(job.id);
   }
 
   Promise.allSettled(fetchPromises);
