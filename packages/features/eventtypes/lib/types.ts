@@ -59,7 +59,29 @@ export type Host = {
   weight: number;
   scheduleId?: number | null;
   groupId: string | null;
+  name?: string | null;
+  avatar?: string;
   location?: HostLocation | null;
+};
+
+// Delta-based host tracking for performance optimization
+// Instead of storing 700+ hosts in form state, we track only changes
+export type HostUpdate = {
+  userId: number;
+  isFixed?: boolean;
+  priority?: number;
+  weight?: number;
+  scheduleId?: number | null;
+  groupId?: string | null;
+  location?: HostLocation | null;
+};
+
+export type PendingHostChanges = {
+  hostsToAdd: Host[];
+  hostsToUpdate: HostUpdate[];
+  hostsToRemove: number[]; // userIds
+  clearAllHosts?: boolean;
+  clearAllHostLocations?: boolean; // When true, backend deletes all HostLocation rows for this event type
 };
 
 export type TeamMember = {
@@ -186,6 +208,9 @@ export type FormValues = {
   showOptimizedSlots: boolean;
   children: ChildrenEventType[];
   hosts: Host[];
+  // Delta-based host changes for performance - only track changes, not all 700+ hosts
+  pendingHostChanges?: PendingHostChanges;
+  pendingFixedHostChanges?: PendingHostChanges;
   hostGroups: {
     id: string;
     name: string;
@@ -291,6 +316,24 @@ export type HostInput = {
   scheduleId?: number | null;
   groupId?: string | null;
   location?: HostLocationInput | null;
+};
+
+export type HostUpdateInput = {
+  userId: number;
+  isFixed?: boolean;
+  priority?: number;
+  weight?: number;
+  scheduleId?: number | null;
+  groupId?: string | null;
+  location?: HostLocationInput | null;
+};
+
+export type PendingHostChangesInput = {
+  hostsToAdd: HostInput[];
+  hostsToUpdate: HostUpdateInput[];
+  hostsToRemove: number[];
+  clearAllHosts?: boolean;
+  clearAllHostLocations?: boolean;
 };
 
 export type HostGroupInput = {
@@ -463,6 +506,8 @@ export type EventTypeUpdateInput = {
   multiplePrivateLinks?: (string | HashedLinkInput)[];
   hostGroups?: HostGroupInput[];
   enablePerHostLocations?: boolean;
+  pendingHostChanges?: PendingHostChangesInput;
+  pendingFixedHostChanges?: PendingHostChangesInput;
   shouldMergePhoneSystemFields?: boolean | null;
 };
 

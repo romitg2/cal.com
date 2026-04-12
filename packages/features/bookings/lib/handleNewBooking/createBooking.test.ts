@@ -162,4 +162,42 @@ describe("createBooking", () => {
       })
     );
   });
+
+  it("sets uuid as UUIDv7 derived from startTime", async () => {
+    const prisma = (await import("@calcom/prisma")).default;
+    const mockCreate = vi.fn().mockResolvedValue({
+      id: 1,
+      uid: "test-uid",
+      user: { uuid: "user-uuid" },
+      attendees: [],
+      payment: [],
+      references: [],
+    });
+
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation((fn: any) =>
+      fn({
+        booking: { create: mockCreate, update: vi.fn() },
+        app_RoutingForms_FormResponse: { update: vi.fn() },
+      })
+    );
+
+    await createBooking(makeParams() as never);
+
+    const createArg = mockCreate.mock.calls[0][0];
+    const uuid = createArg.data.uuid;
+    expect(uuid).toBeDefined();
+    // UUIDv7 format: 8-4-4-4-12 hex with version 7
+    expect(uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+
+    // Regression guard for a uuid@10 bug where v7({ msecs }) produced
+    // zero-timestamp UUIDs (00000000-0000-7xxx-...) on first call in a
+    // process, because the library's internal `_msecs` state started at 0
+    // and wasn't updated when the caller supplied `msecs`. Format-only
+    // assertions let that bug through for months. We now decode the 48-bit
+    // timestamp prefix and assert it matches the input startTime exactly.
+    const timestampHex = uuid.replace(/-/g, "").slice(0, 12);
+    const decodedMs = Number(BigInt(`0x${timestampHex}`));
+    const expectedMs = new Date("2024-01-15T10:00:00Z").getTime();
+    expect(decodedMs).toBe(expectedMs);
+  });
 });

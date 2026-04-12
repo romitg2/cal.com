@@ -1,7 +1,8 @@
 "use client";
 
 import { ErrorCode } from "@calcom/features/auth/lib/ErrorCode";
-import { HOSTED_CAL_FEATURES, WEBAPP_URL, WEBSITE_URL } from "@calcom/lib/constants";
+import { HOSTED_CAL_FEATURES, WEBSITE_URL } from "@calcom/lib/constants";
+import { normalizeCallbackUrl } from "@calcom/lib/normalize-callback-url";
 import { emailRegex } from "@calcom/lib/emailSchema";
 import { getSafeRedirectUrl } from "@calcom/lib/getSafeRedirectUrl";
 import { useCompatSearchParams } from "@calcom/lib/hooks/useCompatSearchParams";
@@ -11,7 +12,10 @@ import { Alert } from "@calcom/ui/components/alert";
 import { Icon } from "@calcom/ui/components/icon";
 import { showToast } from "@calcom/ui/components/toast";
 import { SAMLLogin } from "@calcom/web/modules/auth/components/SAMLLogin";
-import { openGoogleAuthWindow, useGoogleAuthWindowListener } from "@calcom/web/modules/auth/google-auth-window";
+import {
+  openGoogleAuthWindow,
+  useGoogleAuthWindowListener,
+} from "@calcom/web/modules/auth/google-auth-window";
 import { LastUsed, useLastUsed } from "@calcom/web/modules/auth/hooks/useLastUsed";
 import { AnimatedGridBackground } from "@calcom/web/modules/auth/world-map";
 import AddToHomescreen from "@components/AddToHomescreen";
@@ -42,14 +46,9 @@ interface LoginValues {
   csrfToken: string;
 }
 
-const MicrosoftIcon = () => (
-  <img className="size-4" src="/microsoft-logo.svg" alt="" />
-);
+const MicrosoftIcon = () => <img className="size-4" src="/microsoft-logo.svg" alt="" />;
 
-const GoogleIcon = () => (
-  <img className="size-4" src="/google-icon-colored.svg" alt="" />
-);
-
+const GoogleIcon = () => <img className="size-4" src="/google-icon-colored.svg" alt="" />;
 
 export type PageProps = inferSSRProps<typeof getServerSideProps>;
 export default function Login({
@@ -91,14 +90,7 @@ export default function Login({
     [ErrorCode.ThirdPartyIdentityProviderEnabled]: t("account_created_with_identity_provider"),
   };
 
-  let callbackUrl = searchParams?.get("callbackUrl") || "";
-
-  if (/"\//.test(callbackUrl)) callbackUrl = callbackUrl.substring(1);
-
-  // If not absolute URL, make it absolute
-  if (!/^https?:\/\//.test(callbackUrl)) {
-    callbackUrl = `${WEBAPP_URL}/${callbackUrl}`;
-  }
+  let callbackUrl = normalizeCallbackUrl(searchParams?.get("callbackUrl") || "");
 
   const safeCallbackUrl = getSafeRedirectUrl(callbackUrl);
 
@@ -113,7 +105,7 @@ export default function Login({
 
   const signupUrl = (() => {
     if (!callbackUrl) return `${WEBSITE_URL}/signup`;
-    
+
     const params = new URLSearchParams({ redirect: callbackUrl });
     if (isEmbed) params.set("onboardingEmbed", "true");
     if (embedThemeParam) params.set("theme", embedThemeParam);
@@ -185,7 +177,7 @@ export default function Login({
                       {isGoogleLoginEnabled && (
                         <Button
                           size="lg"
-                          className="flex-1"
+                          className="w-full"
                           disabled={formState.isSubmitting}
                           data-testid="google"
                           onClick={async (e) => {
@@ -208,9 +200,9 @@ export default function Login({
                       )}
                       {isOutlookLoginEnabled && (
                         <Button
-                          variant="outline"
                           size="lg"
-                          className="flex-1"
+                          variant="secondary"
+                          className="w-full"
                           data-testid="microsoft"
                           onClick={async (e) => {
                             e.preventDefault();
@@ -236,7 +228,12 @@ export default function Login({
                 )}
 
                 <form onSubmit={methods.handleSubmit(onSubmit)} noValidate data-testid="login-form">
-                  <input defaultValue={csrfToken || undefined} type="hidden" hidden {...register("csrfToken")} />
+                  <input
+                    defaultValue={csrfToken || undefined}
+                    type="hidden"
+                    hidden
+                    {...register("csrfToken")}
+                  />
 
                   {!twoFactorRequired && (
                     <div className="space-y-6">
@@ -261,7 +258,9 @@ export default function Login({
                       <Field>
                         <div className="flex w-full items-center justify-between">
                           <FieldLabel>{t("password")}</FieldLabel>
-                          <Link href="/auth/forgot-password" className="text-sm text-subtle hover:text-emphasis">
+                          <Link
+                            href="/auth/forgot-password"
+                            className="text-sm text-subtle hover:text-emphasis">
                             {t("forgot")}
                           </Link>
                         </div>
@@ -303,11 +302,7 @@ export default function Login({
                   {errorMessage && <Alert severity="error" title={errorMessage} className="mt-4" />}
 
                   {/* Submit Button */}
-                  <Button
-                    type="submit"
-
-                    className="mt-8 w-full"
-                    disabled={formState.isSubmitting}>
+                  <Button type="submit" size="lg" className="mt-8 w-full" disabled={formState.isSubmitting}>
                     {twoFactorRequired ? t("submit") : t("continue")}
                   </Button>
                 </form>
@@ -363,17 +358,13 @@ export default function Login({
             {!twoFactorRequired && (showSignupLink || displaySSOLogin) && (
               <CardFrameFooter className="flex items-center justify-center gap-3">
                 {showSignupLink && (
-                  <Link
-                    href={signupUrl}
-                    className="text-sm font-medium text-emphasis hover:underline">
+                  <Link href={signupUrl} className="text-sm font-medium text-emphasis hover:underline">
                     {t("create_account")}
                   </Link>
                 )}
                 {displaySSOLogin && (
                   <>
-                    {showSignupLink && (
-                      <span className="text-muted-foreground">·</span>
-                    )}
+                    {showSignupLink && <span className="text-muted-foreground">·</span>}
                     <SAMLLogin
                       samlTenantID={samlTenantID}
                       samlProductID={samlProductID}
@@ -388,7 +379,6 @@ export default function Login({
             )}
           </CardFrame>
         </FormProvider>
-
       </div>
 
       <AddToHomescreen />

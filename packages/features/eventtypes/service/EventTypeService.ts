@@ -1,5 +1,8 @@
 import type { appDataSchemas } from "@calcom/app-store/apps.schemas.generated";
 import { DailyLocationType } from "@calcom/app-store/constants";
+import { createSalesforceConnection } from "@calcom/app-store/salesforce/lib/create-salesforce-connection";
+import { validateSalesforceFieldMappings } from "@calcom/app-store/salesforce/lib/validate-field-mappings";
+import { isWriteToBookingEntry } from "@calcom/app-store/salesforce/zod";
 import { eventTypeAppMetadataOptionalSchema } from "@calcom/app-store/zod-utils";
 import type { DestinationCalendarService } from "@calcom/features/calendars/services/DestinationCalendarService";
 import { CalVideoSettingsRepository } from "@calcom/features/calVideoSettings/repositories/CalVideoSettingsRepository";
@@ -23,6 +26,7 @@ import logger from "@calcom/lib/logger";
 import { validateBookerLayouts } from "@calcom/lib/validateBookerLayouts";
 import type { PrismaClient } from "@calcom/prisma";
 import { Prisma } from "@calcom/prisma/client";
+import { TRPCError } from "@trpc/server";
 import {
   EventTypeAutoTranslatedField,
   RRTimestampBasis,
@@ -36,7 +40,7 @@ import {
   handleCustomInputs,
   handlePeriodType,
 } from "../lib/eventTypeUpdateUtils";
-import type { EventTypeUpdateInput } from "../lib/types";
+import type { EventTypeUpdateInput, PendingHostChangesInput } from "../lib/types";
 import type { EventTypeRepository } from "../repositories/eventTypeRepository";
 
 export interface IEventTypeServiceDeps {
@@ -128,6 +132,8 @@ export class EventTypeService {
       children,
       assignAllTeamMembers,
       hosts,
+      pendingHostChanges,
+      pendingFixedHostChanges,
       id,
       multiplePrivateLinks,
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -357,6 +363,17 @@ export class EventTypeService {
     }
 
     let hostLocationDeletions: { userId: number; eventTypeId: number }[] = [];
+
+    // TODO: Delta-based host changes path (Setup Tab) — disabled for now to prevent
+    // regression. The dual-write pattern writes both hosts[] and delta fields to the
+    // form, but until all tabs use the Zustand store, the backend must only use the
+    // legacy hosts[] path. The delta fields are sent but ignored. Re-enable this path
+    // once all tabs are migrated to the Zustand store and the backend can safely
+    // prefer deltas over hosts[].
+    //
+    // const mergedPendingChanges = this.mergePendingHostChanges(pendingHostChanges, pendingFixedHostChanges);
+    // See mergePendingHostChanges() at the bottom of this class for the merge logic.
+    const mergedPendingChanges = null; // Force legacy path for now
 
     if (teamId && hosts) {
       const teamMemberIds = await this.deps.membershipRepository.listAcceptedTeamMemberIds({ teamId });
@@ -602,6 +619,8 @@ export class EventTypeService {
       });
     }
 
+    await this.validateSalesforceFieldMappingsIfPresent(input.metadata);
+
     const updatedEventTypeSelect = {
       slug: true,
       schedulingType: true,
@@ -659,7 +678,7 @@ export class EventTypeService {
       calVideoSettings: calVideoSettingsForChildren,
     });
 
-    if (hostGroups !== undefined || hosts) {
+    if (hostGroups !== undefined || hosts || mergedPendingChanges) {
       await this.deps.eventTypeRepository.deleteEmptyHostGroups({ eventTypeId: id });
     }
 
@@ -682,5 +701,80 @@ export class EventTypeService {
       .catch((err) => console.error("abuse-scoring: onEventTypeChange failed to load", err));
 
     return { eventType };
+  }
+
+  /**
+   * If the event type metadata contains Salesforce field mappings
+   * (onBookingWriteToEventObjectMap), validates them against the actual
+   * Salesforce org schema before allowing the save to proceed.
+   */
+  private async validateSalesforceFieldMappingsIfPresent(
+    metadata: EventTypeUpdateInput["metadata"]
+  ): Promise<void> {
+    const sfApp = metadata?.apps?.salesforce;
+    if (!sfApp) return;
+
+    const credentialId = sfApp.credentialId;
+    const eventObjectMap = sfApp.onBookingWriteToEventObjectMap;
+
+    if (!credentialId || !eventObjectMap || typeof eventObjectMap !== "object") return;
+
+    const hasTypedEntries = Object.values(eventObjectMap).some((v) => isWriteToBookingEntry(v));
+    if (!hasTypedEntries) return;
+
+    try {
+      const conn = await createSalesforceConnection(credentialId);
+      const errors = await validateSalesforceFieldMappings(conn, eventObjectMap, "Event");
+
+      if (errors.length > 0) {
+        const details = errors.map((e) => e.error).join(". ");
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Salesforce field mapping: ${details}`,
+        });
+      }
+    } catch (err) {
+      if (err instanceof TRPCError) throw err;
+      logger.warn("Salesforce field validation skipped due to connection error", { err });
+    }
+  }
+
+  /**
+   * Merges RR and fixed pending host changes into a single delta object.
+   * Returns null if neither has changes, so the legacy hosts[] path runs instead.
+   */
+  private mergePendingHostChanges(
+    pendingHostChanges?: PendingHostChangesInput,
+    pendingFixedHostChanges?: PendingHostChangesInput
+  ): PendingHostChangesInput | null {
+    if (!pendingHostChanges && !pendingFixedHostChanges) return null;
+
+    const merged: PendingHostChangesInput = {
+      hostsToAdd: [
+        ...(pendingHostChanges?.hostsToAdd ?? []),
+        ...(pendingFixedHostChanges?.hostsToAdd ?? []),
+      ],
+      hostsToUpdate: [
+        ...(pendingHostChanges?.hostsToUpdate ?? []),
+        ...(pendingFixedHostChanges?.hostsToUpdate ?? []),
+      ],
+      hostsToRemove: [
+        ...(pendingHostChanges?.hostsToRemove ?? []),
+        ...(pendingFixedHostChanges?.hostsToRemove ?? []),
+      ],
+      clearAllHosts: pendingHostChanges?.clearAllHosts || pendingFixedHostChanges?.clearAllHosts,
+      clearAllHostLocations:
+        pendingHostChanges?.clearAllHostLocations || pendingFixedHostChanges?.clearAllHostLocations,
+    };
+
+    // If there are no actual changes, return null so legacy path runs
+    const hasChanges =
+      merged.hostsToAdd.length > 0 ||
+      merged.hostsToUpdate.length > 0 ||
+      merged.hostsToRemove.length > 0 ||
+      merged.clearAllHosts ||
+      merged.clearAllHostLocations;
+
+    return hasChanges ? merged : null;
   }
 }

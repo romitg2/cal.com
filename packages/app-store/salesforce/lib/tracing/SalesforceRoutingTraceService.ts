@@ -224,4 +224,69 @@ export class SalesforceRoutingTraceService {
   static allRecordsFilteredByFieldRules(data: { recordType: string }): void {
     SalesforceRoutingTraceService.addStep("all_records_filtered_by_field_rules", data);
   }
+
+  // ===== Fuzzy Domain Matching =====
+
+  static fuzzyMatchInitiated(data: { email: string; baseDomain: string; isFreeEmail: boolean }): void {
+    SalesforceRoutingTraceService.addStep("fuzzy_match_initiated", data);
+  }
+
+  static fuzzyMatchSoqlResults(data: {
+    baseDomain: string;
+    rawCount: number;
+    baseDomainMatchCount: number;
+    afterExclusionCount: number;
+  }): void {
+    SalesforceRoutingTraceService.addStep("fuzzy_match_soql_results", data);
+  }
+
+  static fuzzyMatchResult(data: {
+    accountId: string;
+    accountWebsite: string;
+    confidence: "exact" | "fuzzy_single" | "fuzzy_tiebreak";
+  }): void {
+    SalesforceRoutingTraceService.addStep("fuzzy_match_result", data);
+  }
+
+  static fuzzyMatchNoResult(data: { email: string; baseDomain: string; reason: string }): void {
+    SalesforceRoutingTraceService.addStep("fuzzy_match_no_result", data);
+  }
+
+  // ===== Record Type Exclusion =====
+
+  static recordTypeExcluded(data: {
+    accountId: string;
+    accountName: string;
+    recordType: string;
+  }): void {
+    SalesforceRoutingTraceService.addStep("record_type_excluded", data);
+  }
+
+  // ===== Sync Error Surfacing =====
+
+  /**
+   * Record when a Salesforce write operation fails and custom fields are dropped.
+   */
+  static syncError(data: {
+    objectType: string;
+    operation: string;
+    sfErrorCode: string;
+    sfErrorMessage: string;
+    droppedFields?: string[];
+  }): void {
+    SalesforceRoutingTraceService.addStep("sync_error", data);
+  }
+
+  /**
+   * Record when a field value is coerced to match the Salesforce field type
+   * (e.g., string "True" → boolean true for checkbox fields).
+   */
+  static eventFieldTypeCoerced(data: {
+    fieldName: string;
+    originalValue: string;
+    coercedValue: boolean | string;
+    sfFieldType: string;
+  }): void {
+    SalesforceRoutingTraceService.addStep("event_field_type_coerced", data);
+  }
 }

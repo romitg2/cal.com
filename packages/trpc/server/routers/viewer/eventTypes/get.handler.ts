@@ -1,5 +1,6 @@
-// Cache bust: added requiresCancellationReason to eventType
+// Cache bust: added id to children select in eventTypeRepository
 import getEventTypeById from "@calcom/features/eventtypes/lib/getEventTypeById";
+import type { EventType } from "@calcom/features/eventtypes/lib/getEventTypeById";
 import type { PrismaClient } from "@calcom/prisma";
 
 import type { TrpcSessionUser } from "../../../types";
@@ -13,7 +14,7 @@ type GetOptions = {
   input: TGetInputSchema;
 };
 
-export const getHandler = ({ ctx, input }: GetOptions) => {
+export const getHandler = ({ ctx, input }: GetOptions): Promise<EventType> => {
   return getEventTypeById({
     currentOrganizationId: ctx.user.profile?.organizationId ?? null,
     eventTypeId: input.id,

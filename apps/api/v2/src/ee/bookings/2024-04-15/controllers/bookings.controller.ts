@@ -5,15 +5,8 @@ import {
   X_CAL_CLIENT_ID,
   X_CAL_PLATFORM_EMBED,
 } from "@calcom/platform-constants";
-import {
-  BookingResponse,
-  CreationSource,
-  getAllUserBookings,
-  getBookingForReschedule,
-  getBookingInfo,
-  handleCancelBooking,
-  handleMarkNoShow,
-} from "@calcom/platform-libraries";
+import { BookingResponse, CreationSource } from "@calcom/platform-libraries";
+import { getAllUserBookings, getBookingForReschedule, getBookingInfo, handleCancelBooking, handleMarkNoShow } from "@calcom/platform-libraries/bookings";
 import { type InstantBookingCreateResult, makeUserActor } from "@calcom/platform-libraries/bookings";
 import { ErrorCode, HttpError } from "@calcom/platform-libraries/errors";
 import type { ApiResponse } from "@calcom/platform-types";
@@ -66,12 +59,13 @@ import {
   GetOptionalUser,
 } from "@/modules/auth/decorators/get-optional-user/get-optional-user.decorator";
 import { GetUser } from "@/modules/auth/decorators/get-user/get-user.decorator";
-import { Permissions } from "@/modules/auth/decorators/permissions/permissions.decorator";
 import { OAuthPermissions } from "@/modules/auth/decorators/oauth-permissions/oauth-permissions.decorator";
+import { Permissions } from "@/modules/auth/decorators/permissions/permissions.decorator";
 import { ApiAuthGuard } from "@/modules/auth/guards/api-auth/api-auth.guard";
 import { OptionalApiAuthGuard } from "@/modules/auth/guards/optional-api-auth/optional-api-auth.guard";
 import { PermissionsGuard } from "@/modules/auth/guards/permissions/permissions.guard";
 import { BillingService } from "@/modules/billing/services/billing.service";
+import { BookingSeatRepository } from "@/modules/booking-seat/booking-seat.repository";
 import { KyselyReadService } from "@/modules/kysely/kysely-read.service";
 import { OAuthClientRepository } from "@/modules/oauth-clients/oauth-client.repository";
 import { OAuthClientUsersService } from "@/modules/oauth-clients/services/oauth-clients-users.service";
@@ -128,7 +122,8 @@ export class BookingsController_2024_04_15 {
     private readonly recurringBookingService: RecurringBookingService,
     private readonly instantBookingCreateService: InstantBookingCreateService,
     private readonly eventTypeRepository: PrismaEventTypeRepository,
-    private readonly teamRepository: PrismaTeamRepository
+    private readonly teamRepository: PrismaTeamRepository,
+    private readonly bookingSeatRepository: BookingSeatRepository
   ) {}
 
   @Get("/")
@@ -155,10 +150,11 @@ export class BookingsController_2024_04_15 {
         prisma: this.prismaReadService.prisma as unknown as PrismaClient,
         kysely: this.kyselyReadService.kysely,
       },
+      requireExactCount: true,
     });
 
     let nextCursor = null;
-    if (bookings.totalCount > (cursor ?? 0) + (limit ?? 10)) {
+    if (bookings.totalCount! > (cursor ?? 0) + (limit ?? 10)) {
       nextCursor = (cursor ?? 0) + (limit ?? 10);
     }
     return {
@@ -168,6 +164,7 @@ export class BookingsController_2024_04_15 {
   }
 
   @Get("/:bookingUid")
+  @OAuthPermissions([])
   async getBooking(@Param("bookingUid") bookingUid: string): Promise<GetBookingOutput_2024_04_15> {
     const { bookingInfo } = await getBookingInfo(bookingUid);
 
@@ -182,6 +179,7 @@ export class BookingsController_2024_04_15 {
   }
 
   @Get("/:bookingUid/reschedule")
+  @OAuthPermissions([])
   @UseGuards(OptionalApiAuthGuard)
   async getBookingForReschedule(
     @Param("bookingUid") bookingUid: string,
@@ -200,6 +198,7 @@ export class BookingsController_2024_04_15 {
   }
 
   @Post("/")
+  @OAuthPermissions([])
   async createBooking(
     @Req() req: BookingRequest,
     @Body() body: CreateBookingInput_2024_04_15,
@@ -246,6 +245,7 @@ export class BookingsController_2024_04_15 {
   }
 
   @Post("/:bookingUid/cancel")
+  @OAuthPermissions([])
   async cancelBooking(
     @Req() req: BookingRequest,
     @Param("bookingUid") bookingUid: string,
@@ -331,6 +331,7 @@ export class BookingsController_2024_04_15 {
   }
 
   @Post("/recurring")
+  @OAuthPermissions([])
   async createRecurringBooking(
     @Req() req: BookingRequest,
     @Body() body: CreateRecurringBookingInput_2024_04_15[],
@@ -383,6 +384,7 @@ export class BookingsController_2024_04_15 {
   }
 
   @Post("/instant")
+  @OAuthPermissions([])
   async createInstantBooking(
     @Req() req: BookingRequest,
     @Body() body: CreateBookingInput_2024_04_15,
@@ -491,7 +493,18 @@ export class BookingsController_2024_04_15 {
   }
 
   private async isValidRescheduleBooking(rescheduleUid: string, eventTypeId: number): Promise<boolean> {
-    const { bookingInfo } = await getBookingInfo(rescheduleUid);
+    let { bookingInfo } = await getBookingInfo(rescheduleUid);
+
+    // For seated events, rescheduleUid may be a bookingSeat.referenceUid rather than
+    // booking.uid. If no booking was found, fall back to looking up the seat and use
+    // the parent booking's uid.
+    if (!bookingInfo) {
+      const bookingSeat = await this.bookingSeatRepository.getByReferenceUid(rescheduleUid);
+      if (bookingSeat) {
+        ({ bookingInfo } = await getBookingInfo(bookingSeat.booking.uid));
+      }
+    }
+
     if (!bookingInfo) {
       return false;
     }

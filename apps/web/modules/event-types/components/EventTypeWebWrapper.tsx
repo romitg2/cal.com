@@ -1,10 +1,8 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { usePathname, useRouter as useAppRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { z } from "zod";
-
+import { useEventTypeForm } from "@calcom/atoms/event-types/hooks/useEventTypeForm";
+import { useHandleRouteChange } from "@calcom/atoms/event-types/hooks/useHandleRouteChange";
+import { useTabsNavigations } from "@calcom/atoms/event-types/hooks/useTabsNavigations";
 import { useOrgBranding } from "@calcom/features/ee/organizations/context/provider";
 import ManagedEventTypeDialog from "@calcom/features/eventtypes/components/dialogs/ManagedEventDialog";
 import type { EventTypeSetupProps } from "@calcom/features/eventtypes/lib/types";
@@ -15,22 +13,20 @@ import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { useTypedQuery } from "@calcom/lib/hooks/useTypedQuery";
 import { HttpError } from "@calcom/lib/http-error";
 import { SchedulingType } from "@calcom/prisma/enums";
-import { trpc } from "@calcom/trpc/react";
 import type { RouterOutputs } from "@calcom/trpc/react";
+import { trpc } from "@calcom/trpc/react";
 import useMeQuery from "@calcom/trpc/react/hooks/useMeQuery";
 import { showToast } from "@calcom/ui/components/toast";
-
-import { TRPCClientError } from "@trpc/react-query";
-
 import { revalidateTeamEventTypeCache } from "@calcom/web/app/(booking-page-wrapper)/team/[slug]/[type]/actions";
 import { revalidateEventTypeEditPage } from "@calcom/web/app/(use-page-wrapper)/event-types/[type]/actions";
-
 import WebShell from "@calcom/web/modules/shell/Shell";
-import { EventType as EventTypeComponent } from "./EventType";
-import { useEventTypeForm } from "@calcom/atoms/event-types/hooks/useEventTypeForm";
-import { useHandleRouteChange } from "@calcom/atoms/event-types/hooks/useHandleRouteChange";
-import { useTabsNavigations } from "@calcom/atoms/event-types/hooks/useTabsNavigations";
+import { TRPCClientError } from "@trpc/react-query";
+import dynamic from "next/dynamic";
+import { useRouter as useAppRouter, usePathname } from "next/navigation";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 import { useManagedEventConflictCheck } from "../hooks/use-managed-event-conflict-check";
+import { EventType as EventTypeComponent } from "./EventType";
 
 type EventPermissions = {
   eventTypes: {
@@ -162,13 +158,22 @@ const EventTypeWeb = ({
       }));
       currentValues.assignAllTeamMembers = currentValues.assignAllTeamMembers || false;
 
+      // Clear delta fields after successful save to prevent replay on next submit.
+      // The Zustand store is NOT reset here because its serverHosts baseline is stale;
+      // it will refresh when tRPC queries re-fetch (triggered by invalidation below).
+      currentValues.pendingHostChanges = { hostsToAdd: [], hostsToUpdate: [], hostsToRemove: [] };
+      currentValues.pendingFixedHostChanges = { hostsToAdd: [], hostsToUpdate: [], hostsToRemove: [] };
+
       if (currentValues.hosts?.length === 0) {
         currentValues.enablePerHostLocations = false;
       }
 
       // Reset the form with these values as new default values to ensure the correct comparison for dirtyFields eval
       form.reset(currentValues);
-      revalidateEventTypeEditPage(eventType.id);
+      revalidateEventTypeEditPage(
+        eventType.id,
+        eventType.children.map((child) => child.id)
+      );
       if (eventType.team?.slug) {
         // When an event-type is updated,
         // guests could still hit a stale cache and see the old page.
@@ -183,6 +188,9 @@ const EventTypeWeb = ({
     async onSettled() {
       await utils.viewer.eventTypes.get.invalidate();
       await utils.viewer.eventTypes.getByViewer.invalidate();
+      // Invalidate getAllHosts so the Zustand store's server host baseline
+      // refreshes after save (prevents stale deltas accumulating across saves)
+      await utils.viewer.eventTypes.getAllHosts.invalidate();
     },
     onError: (err) => {
       let message = "";
@@ -195,8 +203,14 @@ const EventTypeWeb = ({
         message = `${err.data.code}: ${t("error_event_type_unauthorized_update")}`;
       }
 
-      if (err.data?.code === "PARSE_ERROR" || err.data?.code === "BAD_REQUEST") {
+      if (err.data?.code === "PARSE_ERROR") {
         message = `${err.data.code}: ${t(err.message)}`;
+      }
+
+      if (err.data?.code === "BAD_REQUEST") {
+        const isSalesforceValidation = err.message.startsWith("Salesforce field mapping:");
+        showToast(t(err.message), "error", { duration: isSalesforceValidation ? 30000 : 5000 });
+        return;
       }
 
       if (err.data?.code === "INTERNAL_SERVER_ERROR") {
@@ -241,18 +255,10 @@ const EventTypeWeb = ({
           eventType={eventType}
           locationOptions={locationOptions}
           team={team}
-          teamMembers={teamMembers}
           destinationCalendar={destinationCalendar}
         />
       ),
-      availability: () => (
-        <EventAvailabilityTab
-          eventType={eventType}
-          isTeamEvent={!!team}
-          user={user}
-          teamMembers={teamMembers}
-        />
-      ),
+      availability: () => <EventAvailabilityTab eventType={eventType} isTeamEvent={!!team} user={user} />,
       team: () => (
         <EventTeamAssignmentTab
           orgId={orgBranding?.id ?? null}
@@ -326,33 +332,6 @@ const EventTypeWeb = ({
     },
   });
 
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      const Components = [
-        EventSetupTab,
-        EventAvailabilityTab,
-        EventTeamAssignmentTab,
-        EventLimitsTab,
-        EventAdvancedTab,
-        EventInstantTab,
-        EventRecurringTab,
-        EventAppsTab,
-        EventWorkflowsTab,
-        EventWebhooksTab,
-      ];
-
-      Components.forEach((C) => {
-        // how to preload with app dir?
-        // @ts-expect-error Property 'render' does not exist on type 'ComponentClass
-        C.render?.preload();
-      });
-    }, 300);
-
-    return () => {
-      clearTimeout(timeout);
-    };
-  }, []);
-
   const querySchema = z.object({
     tabName: z
       .enum([
@@ -375,6 +354,11 @@ const EventTypeWeb = ({
   const {
     data: { tabName },
   } = useTypedQuery(querySchema);
+
+  // Defer the tab name so React keeps showing the current tab's content
+  // while the new tab's dynamic import loads, preventing the brief flash
+  // of the previous tab that occurs during Suspense resolution.
+  const deferredTabName = useDeferredValue(tabName);
 
   const deleteMutation = trpc.viewer.eventTypes.delete.useMutation({
     onSuccess: async () => {
@@ -428,7 +412,7 @@ const EventTypeWeb = ({
       formMethods={form}
       isUpdating={updateMutation.isPending}
       isPlatform={false}
-      tabName={tabName}
+      tabName={deferredTabName}
       tabsNavigation={tabsNavigation}
       Shell={WebShell}>
       <>

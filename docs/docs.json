@@ -55,6 +55,7 @@
                   "GET /v2/bookings/{bookingUid}/recordings",
                   "GET /v2/bookings/{bookingUid}/transcripts",
                   "POST /v2/bookings/{bookingUid}/reschedule",
+                  "POST /v2/bookings/{bookingUid}/request-reschedule",
                   "POST /v2/bookings/{bookingUid}/cancel",
                   "POST /v2/bookings/{bookingUid}/mark-absent",
                   "POST /v2/bookings/{bookingUid}/reassign",
@@ -114,6 +115,22 @@
                   "POST /v2/me/ooo",
                   "PATCH /v2/me/ooo/{oooId}",
                   "DELETE /v2/me/ooo/{oooId}"
+                ]
+              },
+              {
+                "group": "Notifications",
+                "expanded": false,
+                "pages": [
+                  "POST /v2/notifications/subscriptions/app-push",
+                  "DELETE /v2/notifications/subscriptions/app-push"
+                ]
+              },
+              {
+                "group": "Credits",
+                "expanded": false,
+                "pages": [
+                  "GET /v2/credits/available",
+                  "POST /v2/credits/charge"
                 ]
               }
             ]
@@ -651,7 +668,7 @@
             "group": "AUTH & ACCESS",
             "pages": [
               {
-                "group": "Api Keys",
+                "group": "API Keys",
                 "expanded": false,
                 "pages": [
                   "POST /v2/api-keys/refresh"
@@ -733,6 +750,12 @@
               "atoms/introduction",
               "atoms/setup",
               "atoms/cal-oauth-provider"
+            ]
+          },
+          {
+            "group": "Onboarding",
+            "pages": [
+              "atoms/onboarding-embed"
             ]
           },
           {
@@ -836,7 +859,8 @@
                 "pages": [
                   "developing/guides/appstore-and-integration/build-a-greeter-app",
                   "developing/guides/appstore-and-integration/build-an-app",
-                  "developing/guides/appstore-and-integration/how-to-show-assigned-people-from-a-crm"
+                  "developing/guides/appstore-and-integration/how-to-show-assigned-people-from-a-crm",
+                  "developing/guides/appstore-and-integration/salesforce"
                 ]
               },
               {
@@ -968,7 +992,8 @@
                 "pages": [
                   "self-hosting/guides/organization/organization-setup",
                   "self-hosting/guides/organization/understanding-organization-env-variables",
-                  "self-hosting/guides/organization/single-organization-setup"
+                  "self-hosting/guides/organization/single-organization-setup",
+                  "self-hosting/guides/organization/guest-notification-settings"
                 ]
               }
             ]
@@ -976,7 +1001,7 @@
         ]
       },
       {
-        "tab": "API v1 Reference [Deprecated]",
+        "tab": "API v1 Reference [Shut Down]",
         "openapi": {
           "source": "/api-reference/v1/openapi-v1.json",
           "directory": "api-reference/v1"

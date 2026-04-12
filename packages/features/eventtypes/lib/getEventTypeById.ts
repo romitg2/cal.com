@@ -9,13 +9,13 @@ import { getBookerBaseUrl } from "@calcom/features/ee/organizations/lib/getBooke
 import { OrganizationRepository } from "@calcom/features/ee/organizations/repositories/OrganizationRepository";
 import { EventTypeRepository } from "@calcom/features/eventtypes/repositories/eventTypeRepository";
 import { UserRepository } from "@calcom/features/users/repositories/UserRepository";
+import { getTranslation } from "@calcom/i18n/server";
 import { WEBSITE_URL } from "@calcom/lib/constants";
 import { getUserAvatarUrl } from "@calcom/lib/getAvatarUrl";
 import { parseBookingLimit } from "@calcom/lib/intervalLimits/isBookingLimits";
 import { parseDurationLimit } from "@calcom/lib/intervalLimits/isDurationLimits";
 import { parseEventTypeColor } from "@calcom/lib/isEventTypeColor";
 import { parseRecurringEvent } from "@calcom/lib/isRecurringEvent";
-import { getTranslation } from "@calcom/i18n/server";
 import type { PrismaClient } from "@calcom/prisma";
 import type { Prisma } from "@calcom/prisma/client";
 import { MembershipRole, SchedulingType } from "@calcom/prisma/enums";
@@ -76,36 +76,38 @@ export const getEventTypeById = async ({
   const apps = newMetadata?.apps || {};
   const eventTypeWithParsedMetadata = { ...rawEventType, metadata: newMetadata };
   const userRepo = new UserRepository(prisma);
-  const eventTeamMembershipsWithUserProfile = [];
-  for (const eventTeamMembership of rawEventType.team?.members || []) {
-    eventTeamMembershipsWithUserProfile.push({
-      ...eventTeamMembership,
-      user: await userRepo.enrichUserWithItsProfile({
-        user: eventTeamMembership.user,
-      }),
-    });
-  }
 
-  const childrenWithUserProfile = [];
-  for (const child of rawEventType.children || []) {
-    childrenWithUserProfile.push({
-      ...child,
-      owner: child.owner
-        ? await userRepo.enrichUserWithItsProfile({
-            user: child.owner,
-          })
-        : null,
-    });
-  }
+  // Batch profile enrichment: each group is enriched in a single DB call instead of
+  // N+1 sequential queries. For a team with 2000 members this cuts ~2000 DB round-trips to 1.
+  const teamMemberUsers = (rawEventType.team?.members || []).map((m) => m.user);
+  const children = rawEventType.children || [];
+  const childOwners = children
+    .map((c) => c.owner)
+    .filter((owner): owner is NonNullable<typeof owner> => owner !== null);
 
-  const eventTypeUsersWithUserProfile = [];
-  for (const eventTypeUser of rawEventType.users) {
-    eventTypeUsersWithUserProfile.push(
-      await userRepo.enrichUserWithItsProfile({
-        user: eventTypeUser,
-      })
-    );
-  }
+  const [enrichedTeamMemberUsers, enrichedChildOwners, enrichedEventTypeUsers] = await Promise.all([
+    userRepo.enrichUsersWithTheirProfiles(teamMemberUsers),
+    userRepo.enrichUsersWithTheirProfiles(childOwners),
+    userRepo.enrichUsersWithTheirProfiles(rawEventType.users),
+  ]);
+
+  const enrichedChildOwnerMap = new Map(enrichedChildOwners.map((u) => [u.id, u]));
+
+  const members = rawEventType.team?.members || [];
+  const eventTeamMembershipsWithUserProfile = members.map((m, i) => ({
+    ...m,
+    // enrichedTeamMemberUsers[i] is guaranteed to exist since both arrays derive from the same members list
+    user: enrichedTeamMemberUsers[i] ?? m.user,
+  }));
+
+  const childrenWithUserProfile = children.map((child) => {
+    if (!child.owner) return { ...child, owner: null as null };
+    const enrichedOwner = enrichedChildOwnerMap.get(child.owner.id);
+    if (!enrichedOwner) throw new Error(`Enrichment missing for child owner ${child.owner.id}`);
+    return { ...child, owner: enrichedOwner };
+  });
+
+  const eventTypeUsersWithUserProfile = enrichedEventTypeUsers;
 
   newMetadata.apps = {
     ...apps,
@@ -136,6 +138,11 @@ export const getEventTypeById = async ({
     metadata: parsedMetaData,
     customInputs: parsedCustomInputs,
     users: rawEventType.users,
+    hosts: restEventType.hosts.map((host) => ({
+      ...host,
+      avatar: getUserAvatarUrl(host.user),
+      name: host.user.name,
+    })),
     bookerUrl: restEventType.team
       ? await getBookerBaseUrl(restEventType.team.parentId)
       : restEventType.owner

@@ -48,16 +48,28 @@ jobs:
           if_no_artifact_found: warn
         continue-on-error: true
 
+      - name: Install istanbul-lib-coverage
+        run: yarn add istanbul-lib-coverage@3
+
       - name: Compare coverage against main
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
+            const { createCoverageMap } = require('istanbul-lib-coverage');
 
             function loadCoverage(filePath) {
               try {
                 const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
                 return data.total;
+              } catch {
+                return null;
+              }
+            }
+
+            function loadFinalCoverage(filePath) {
+              try {
+                return JSON.parse(fs.readFileSync(filePath, 'utf8'));
               } catch {
                 return null;
               }
@@ -69,6 +81,11 @@ jobs:
             const prIntegration = loadCoverage('coverage/pr/integration/coverage-summary.json');
             const baseUnit = loadCoverage('coverage/base/unit/coverage-summary.json');
             const baseIntegration = loadCoverage('coverage/base/integration/coverage-summary.json');
+
+            const prUnitFinal = loadFinalCoverage('coverage/pr/unit/coverage-final.json');
+            const prIntegrationFinal = loadFinalCoverage('coverage/pr/integration/coverage-final.json');
+            const baseUnitFinal = loadFinalCoverage('coverage/base/unit/coverage-final.json');
+            const baseIntegrationFinal = loadFinalCoverage('coverage/base/integration/coverage-final.json');
 
             if (!prUnit && !prIntegration) {
               core.info('No PR coverage data found. Skipping comparison.');
@@ -85,11 +102,15 @@ jobs:
             // A small tolerance prevents false failures from this baseline drift.
             const DROP_TOLERANCE = -0.5;
 
-            let dropped = false;
-            const droppedDetails = [];
+            // Per-category drops are tracked for informational reporting only.
+            // Only combined coverage drops trigger a build failure (see below).
+            let perCategoryDropped = false;
+            const perCategoryDroppedDetails = [];
+            let combinedDropped = false;
+            const combinedDroppedDetails = [];
             let summary = '## Coverage Report\n\n';
 
-            function buildTable(label, prData, baseData) {
+            function buildTable(label, prData, baseData, { trackAsCombined = false } = {}) {
               let table = `### ${label}\n\n`;
 
               if (!prData) {
@@ -115,39 +136,69 @@ jobs:
                 const icon = diff < DROP_TOLERANCE ? ' :red_circle:' : (diff > 0 ? ' :green_circle:' : '');
                 const delta = `${sign}${diff.toFixed(2)}%${icon}`;
                 if (diff < DROP_TOLERANCE) {
-                  dropped = true;
-                  droppedDetails.push({
+                  const detail = {
                     category: label,
                     metric: m,
                     main: baseData[m].pct.toFixed(2),
                     pr: prData[m].pct.toFixed(2),
                     diff: diff.toFixed(2),
-                  });
+                  };
+                  if (trackAsCombined) {
+                    combinedDropped = true;
+                    combinedDroppedDetails.push(detail);
+                  } else {
+                    perCategoryDropped = true;
+                    perCategoryDroppedDetails.push(detail);
+                  }
                 }
                 table += `| ${m} | ${baseData[m].pct.toFixed(2)}% | ${prData[m].pct.toFixed(2)}% | ${delta} |\n`;
               }
               return table + '\n';
             }
 
-            function aggregate(unitData, integrationData) {
-              if (!unitData && !integrationData) return null;
+            /**
+             * Merge coverage using istanbul-lib-coverage for true line-level
+             * merging.  For files present in both reports, hit counts are
+             * summed so lines covered by *either* test type count.
+             * Falls back to coverage-summary.json file-level pick when
+             * coverage-final.json is not available (backwards compat).
+             */
+            function mergeCoverage(finalDataArray, summaryDataArray) {
+              const finals = finalDataArray.filter(Boolean);
+              if (finals.length > 0) {
+                const map = createCoverageMap({});
+                for (const src of finals) map.merge(src);
+                const summary = map.getCoverageSummary();
+                return {
+                  statements: { covered: summary.statements.covered, total: summary.statements.total, pct: summary.statements.pct },
+                  branches: { covered: summary.branches.covered, total: summary.branches.total, pct: summary.branches.pct },
+                  functions: { covered: summary.functions.covered, total: summary.functions.total, pct: summary.functions.pct },
+                  lines: { covered: summary.lines.covered, total: summary.lines.total, pct: summary.lines.pct },
+                };
+              }
+              // Fallback: file-level pick from coverage-summary.json
+              const available = summaryDataArray.filter(Boolean);
+              if (available.length === 0) return null;
+              if (available.length === 1) return available[0].total;
+              const allFiles = new Set();
+              for (const src of available) {
+                for (const key of Object.keys(src)) {
+                  if (key !== 'total') allFiles.add(key);
+                }
+              }
               const result = {};
               for (const m of metrics) {
-                let totalCovered = 0;
-                let totalTotal = 0;
-                if (unitData && unitData[m]) {
-                  totalCovered += unitData[m].covered;
-                  totalTotal += unitData[m].total;
+                let covered = 0, total = 0;
+                for (const file of allFiles) {
+                  let best = null;
+                  for (const src of available) {
+                    const entry = src[file];
+                    if (entry && entry[m] && (best === null || entry.lines.pct > best.lines.pct)) best = entry;
+                  }
+                  if (best && best[m]) { covered += best[m].covered; total += best[m].total; }
                 }
-                if (integrationData && integrationData[m]) {
-                  totalCovered += integrationData[m].covered;
-                  totalTotal += integrationData[m].total;
-                }
-                result[m] = {
-                  covered: totalCovered,
-                  total: totalTotal,
-                  pct: totalTotal > 0 ? (totalCovered / totalTotal) * 100 : 0,
-                };
+                const pct = total > 0 ? Math.round(((covered / total) * 100) * 100) / 100 : 0;
+                result[m] = { covered, total, pct };
               }
               return result;
             }
@@ -165,26 +216,79 @@ jobs:
               summary += buildTable('Integration Tests', prIntegration, baseIntegration);
             }
 
-            const prAggregate = aggregate(prUnit, prIntegration);
-            const baseAggregate = aggregate(baseUnit, baseIntegration);
+            const prUnitSummaryFull = loadFinalCoverage('coverage/pr/unit/coverage-summary.json');
+            const prIntegrationSummaryFull = loadFinalCoverage('coverage/pr/integration/coverage-summary.json');
+            const baseUnitSummaryFull = loadFinalCoverage('coverage/base/unit/coverage-summary.json');
+            const baseIntegrationSummaryFull = loadFinalCoverage('coverage/base/integration/coverage-summary.json');
+
+            const prCombined = mergeCoverage([prUnitFinal, prIntegrationFinal], [prUnitSummaryFull, prIntegrationSummaryFull]);
+            const baseCombined = mergeCoverage([baseUnitFinal, baseIntegrationFinal], [baseUnitSummaryFull, baseIntegrationSummaryFull]);
 
             const sameShape =
               ((prUnit && baseUnit) || (!prUnit && !baseUnit)) &&
               ((prIntegration && baseIntegration) || (!prIntegration && !baseIntegration));
 
-            if (prAggregate && sameShape) {
-              summary += buildTable('Aggregate (Unit + Integration)', prAggregate, baseAggregate);
-              summary += '> **Note:** Aggregate numbers are approximate — unit and integration coverage instrument the same source files, so covered/total counts are summed across both and may double-count.\n\n';
+            if (prCombined && sameShape) {
+              summary += buildTable('Combined (Unit + Integration)', prCombined, baseCombined, { trackAsCombined: true });
+              summary += '> **Note:** Combined numbers are computed by merging coverage at the line level via istanbul — lines covered by *either* test type count toward the total.\n\n';
             }
 
-            if (dropped) {
+            // ── Mixed coverage threshold (80%) ──────────────────────────
+            // Only enforce when both test types ran — a single-source
+            // "combined" number is just that type's coverage and should
+            // not be held against the 80% combined target.
+            const COMBINED_THRESHOLD = 80;
+            const hasBothPrSources = prUnit && prIntegration;
+            if (prCombined && hasBothPrSources) {
+              const belowThreshold = metrics.filter(m => prCombined[m].pct < COMBINED_THRESHOLD);
+              if (belowThreshold.length > 0) {
+                summary += '---\n\n';
+                summary += '### :warning: Combined Coverage Below 80% Target\n\n';
+                summary += '| Metric | Combined | Target |\n';
+                summary += '|--------|--------:|---------:|\n';
+                for (const m of belowThreshold) {
+                  summary += `| ${m} | ${prCombined[m].pct.toFixed(2)}% | ${COMBINED_THRESHOLD}% |\n`;
+                }
+                summary += '\n';
+                summary += '> **Per-type targets:** Unit coverage should aim for ~100% on low-level logic and services (mocked deps). ';
+                summary += 'Integration coverage should aim for 100% on repositories that query the database.\n\n';
+              } else {
+                summary += '### :white_check_mark: Combined Coverage Passes 80% Target\n\n';
+                summary += `All metrics meet the **${COMBINED_THRESHOLD}%** combined threshold across unit + integration.\n\n`;
+              }
+            }
+
+            // ── Per-category drops (informational warning only) ────────────
+            // Per-category (unit-only or integration-only) regressions are shown
+            // as warnings but do NOT fail the build.  Code that is dual-path
+            // (e.g. if (isIntegration) … else …) or tests moved between
+            // categories can cause per-category swings even when overall
+            // coverage is stable.  The combined number is the authoritative
+            // metric because it merges hit-counts at the line level.
+            if (perCategoryDropped) {
               summary += '---\n\n';
-              summary += '### :x: Coverage Regression Detected\n\n';
-              summary += 'The following metrics dropped by more than the allowed tolerance ';
+              summary += '### :warning: Per-Category Coverage Drops (informational)\n\n';
+              summary += 'The following individual-category metrics dropped by more than ';
+              summary += `${Math.abs(DROP_TOLERANCE)}%.  `;
+              summary += 'These are shown for visibility but **do not fail the build** — ';
+              summary += 'only the combined regression check is enforced.\n\n';
+              summary += '| Category | Metric | main | PR | Drop |\n';
+              summary += '|----------|--------|-----:|---:|-----:|\n';
+              for (const d of perCategoryDroppedDetails) {
+                summary += `| ${d.category} | ${d.metric} | ${d.main}% | ${d.pr}% | ${d.diff}% |\n`;
+              }
+              summary += '\n';
+            }
+
+            // ── Combined coverage regression (build failure) ─────────────────
+            if (combinedDropped) {
+              summary += '---\n\n';
+              summary += '### :x: Combined Coverage Regression Detected\n\n';
+              summary += 'The following **combined** metrics dropped by more than the allowed tolerance ';
               summary += `(${Math.abs(DROP_TOLERANCE)}%):\n\n`;
               summary += '| Category | Metric | main | PR | Drop |\n';
               summary += '|----------|--------|-----:|---:|-----:|\n';
-              for (const d of droppedDetails) {
+              for (const d of combinedDroppedDetails) {
                 summary += `| ${d.category} | ${d.metric} | ${d.main}% | ${d.pr}% | ${d.diff}% |\n`;
               }
 
@@ -207,8 +311,12 @@ jobs:
 
             await core.summary.addRaw(summary).write();
 
-            if (dropped) {
-              core.setFailed(`Coverage dropped by more than ${Math.abs(DROP_TOLERANCE)}% compared to main. See the job summary above for details and how to fix.`);
+            if (combinedDropped) {
+              core.setFailed(`Combined coverage dropped by more than ${Math.abs(DROP_TOLERANCE)}% compared to main. See the job summary above for details and how to fix.`);
+            } else if (perCategoryDropped) {
+              core.warning(`Per-category coverage dropped in some areas but combined coverage is stable. See the job summary for details.`);
+            } else if (prCombined && hasBothPrSources && metrics.some(m => prCombined[m].pct < COMBINED_THRESHOLD)) {
+              core.warning(`Combined coverage is below the ${COMBINED_THRESHOLD}% target. See the job summary above for details.`);
             } else {
               core.info('Coverage is stable or improved compared to main.');
             }

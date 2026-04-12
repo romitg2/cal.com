@@ -1,5 +1,5 @@
 import { ERROR_STATUS, SUCCESS_STATUS } from "@calcom/platform-constants";
-import { handleCreatePhoneCall } from "@calcom/platform-libraries";
+import { handleCreatePhoneCall } from "@calcom/platform-libraries/conferencing";
 import {
   CreateTeamEventTypeInput_2024_06_14,
   GetOrganizationEventTypesQuery_2024_06_14,
@@ -195,7 +195,7 @@ export class OrganizationsEventTypesController {
     };
   }
 
-  @OAuthPermissions(["TEAM_EVENT_TYPE_READ"])
+  @OAuthPermissions([])
   @UseGuards(IsOrgGuard, IsTeamInOrg, IsAdminAPIEnabledGuard)
   @Get("/teams/:teamId/event-types")
   @ApiOperation({

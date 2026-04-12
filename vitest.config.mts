@@ -73,11 +73,10 @@ export default defineConfig({
       },
       // Alias Node.js built-ins for jsdom environment
       { find: "crypto", replacement: "node:crypto" },
-      // Web modules sub-path aliases (must come before the generic ~ → api/v1 alias)
+      // Web modules sub-path aliases
       { find: "~/data-table", replacement: path.resolve(__dirname, "apps/web/modules/data-table") },
       { find: "~/filters", replacement: path.resolve(__dirname, "apps/web/modules/filters") },
-      // API v1 path alias
-      { find: "~", replacement: path.resolve(__dirname, "apps/api/v1") },
+      { find: "~/ee", replacement: path.resolve(__dirname, "apps/web/modules/ee") },
       // apps/web path aliases
       { find: "@lib", replacement: path.resolve(__dirname, "apps/web/lib") },
       { find: /^@components\/(.*)/, replacement: path.resolve(__dirname, "apps/web/components/$1") },
@@ -111,6 +110,11 @@ export default defineConfig({
     include: getTestInclude(),
     exclude: getTestExclude(),
     pool: "forks",
+    env: {
+      // Propagate VITEST_MODE to forked child processes so __mocks__/prisma.ts
+      // can decide whether to use prismock (unit) or real Prisma (integration).
+      ...(isIntegrationMode ? { VITEST_MODE: "integration" } : {}),
+    },
     server: {
       deps: {
         inline: [/@calcom\/.*/],
@@ -118,7 +122,7 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
-      reporter: ["text", "json-summary"],
+      reporter: ["text", "json-summary", "json"],
       reportOnFailure: true,
       include: isIntegrationMode
         ? ["packages/**/*.ts", "packages/**/*.tsx", "apps/**/*.ts", "apps/**/*.tsx"]
@@ -146,6 +150,14 @@ export default defineConfig({
         // DI module wiring files use inline `type` imports that Rollup's JS
         // parser cannot handle. They contain no testable logic.
         "**/*.module.ts",
+        // apps/web TSX files contain JSX that Rollup's JS parser cannot handle
+        // during V8 coverage collection. Excluding only .tsx preserves coverage
+        // for the ~339 plain .ts source files that parse fine.
+        "**/apps/web/**/*.tsx",
+        // These two .ts files use path aliases (@lib, @server, ~) that Rollup
+        // cannot resolve during coverage instrumentation.
+        "**/apps/web/app/api/compliance/download/route.ts",
+        "**/apps/web/server/lib/[user]/[type]/getServerSideProps.ts",
         // Barrel re-export files using `export type` syntax.
         "**/packages/features/ee/organizations/lib/service/onboarding/index.ts",
         "**/trigger/config.ts",

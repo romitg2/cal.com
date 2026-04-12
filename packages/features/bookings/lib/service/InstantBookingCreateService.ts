@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { v7 as uuidv7 } from "uuid";
 import dayjs from "@calcom/dayjs";
 import type {
   CreateInstantBookingData,
@@ -25,19 +26,11 @@ import { BookingStatus, WebhookTriggerEvents } from "@calcom/prisma/enums";
 import short from "short-uuid";
 import { v5 as uuidv5 } from "uuid";
 import type { WebhookVersion } from "../../../webhooks/lib/interface/webhook-repository";
-import { instantMeetingSubscriptionSchema as subscriptionSchema } from "../dto/schema";
+import { parseBrowserSubscription } from "@calcom/features/notifications/web-push-subscription-schema";
 
 interface IInstantBookingCreateServiceDependencies {
   prismaClient: PrismaClient;
 }
-
-const parseBrowserSubscription = (subscription: string) => {
-  try {
-    return subscriptionSchema.safeParse(JSON.parse(subscription));
-  } catch {
-    return subscriptionSchema.safeParse(null);
-  }
-};
 
 const handleInstantMeetingWebhookTrigger = async (args: {
   eventTypeId: number;
@@ -267,11 +260,13 @@ export async function handler(
   ];
 
   // Create Partial
+  const startTime = dayjs.utc(reqBody.start).toDate();
   const newBookingData: Prisma.BookingCreateInput = {
     uid,
+    uuid: uuidv7({ msecs: startTime.getTime() }),
     responses: reqBody.responses === null ? Prisma.JsonNull : reqBody.responses,
     title: bookingTitle,
-    startTime: dayjs.utc(reqBody.start).toDate(),
+    startTime,
     endTime: dayjs.utc(reqBody.end).toDate(),
     description: reqBody.notes,
     customInputs: isPrismaObjOrUndefined(customInputs),

@@ -9,8 +9,8 @@ import {
 } from "@calcom/features/ee/workflows/lib/actionHelperFunctions";
 import { deleteRemindersOfActiveOnIds } from "@calcom/features/ee/workflows/lib/deleteRemindersOfActiveOnIds";
 import { isAuthorized } from "@calcom/features/ee/workflows/lib/isAuthorized";
-import { WorkflowReminderRepository } from "@calcom/features/ee/workflows/lib/repository/workflowReminder";
 import { scheduleWorkflowNotifications } from "@calcom/features/ee/workflows/lib/scheduleWorkflowNotifications";
+import { WorkflowReminderRepository } from "@calcom/features/ee/workflows/repositories/workflow-reminder-repository";
 import { verifyEmailSender } from "@calcom/features/ee/workflows/lib/verifyEmailSender";
 import { WorkflowRelationsRepository } from "@calcom/features/ee/workflows/repositories/WorkflowRelationsRepository";
 import { WorkflowRepository } from "@calcom/features/ee/workflows/repositories/workflow-repository";
@@ -266,8 +266,10 @@ export const updateHandler = async ({ ctx, input }: UpdateOptions) => {
 
   const agentRepo = new PrismaAgentRepository(prisma);
 
+  const workflowReminderRepository = new WorkflowReminderRepository(ctx.prisma);
+
   const stepIds = userWorkflow.steps.map((step) => step.id);
-  const allReminders = await WorkflowReminderRepository.findWorkflowRemindersByStepIds(stepIds);
+  const allReminders = await workflowReminderRepository.findByStepIds(stepIds);
 
   const remindersByStepId = new Map<number, (typeof allReminders)[number][]>();
   for (const reminder of allReminders) {
@@ -790,6 +792,11 @@ export const updateHandler = async ({ ctx, input }: UpdateOptions) => {
       });
     }
   }
+
+  // Gate 6: abuse scoring for workflow update — async, fail-open
+  import("@calcom/features/abuse-scoring/lib/hooks")
+    .then(({ onWorkflowChange }) => onWorkflowChange(user.id))
+    .catch((err) => console.error("abuse-scoring: onWorkflowChange failed to load", err));
 
   const workflowWithPermissions = await addPermissionsToWorkflow(workflow, ctx.user.id);
   return {

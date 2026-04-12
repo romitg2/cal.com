@@ -1,6 +1,4 @@
 import getICalUID from "@calcom/emails/lib/getICalUID";
-// biome-ignore lint/style/noRestrictedImports: pre-existing violation
-import { WebhookVersion } from "@calcom/features/webhooks/lib/interface/webhook-repository";
 import type { Booking, BookingReference, EventType, Prisma, Webhook } from "@calcom/prisma/client";
 import { BookingStatus, CreationSource, DisableCancelRescheduleScope } from "@calcom/prisma/enums";
 import type { CalendarEvent, Person, VideoCallData } from "@calcom/types/Calendar";
@@ -36,9 +34,11 @@ export const buildBooking = (
   booking?: Partial<Booking> & { references?: Partial<BookingReference>[] }
 ): Booking & { references?: Partial<BookingReference>[]; attendees?: [] } => {
   const uid = faker.datatype.uuid();
-  return {
+  // Typed explicitly so new Booking fields cause a clear "Property X is missing" error.
+  const defaults: Booking = {
     id: faker.datatype.number(),
     uid,
+    uuid: null,
     userId: null,
     eventTypeId: null,
     idempotencyKey: null,
@@ -75,11 +75,10 @@ export const buildBooking = (
     rating: null,
     noShowHost: null,
     ratingFeedback: null,
-    attendees: [],
     oneTimePassword: null,
     creationSource: CreationSource.WEBAPP,
-    ...booking,
   };
+  return { ...defaults, attendees: [], ...booking };
 };
 
 export const buildEventType = (eventType?: Partial<EventType>): EventType => {
@@ -196,7 +195,7 @@ export const buildWebhook = (webhook?: Partial<Webhook>): Webhook => {
     platformOAuthClientId: null,
     time: null,
     timeUnit: null,
-    version: WebhookVersion.V_2021_10_20,
+    version: "2021-10-20",
     ...webhook,
     platform: false,
   };

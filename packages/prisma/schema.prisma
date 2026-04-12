@@ -968,6 +968,8 @@ enum BookingStatus {
 model Booking {
   id                           Int                               @id @default(autoincrement())
   uid                          String                            @unique
+  /// UUIDv7 derived from startTime for time-ordered keyset pagination
+  uuid                         String?                           @db.Uuid
   // (optional) UID based on slot start/end time & email against duplicates
   idempotencyKey               String?                           @unique
   user                         User?                             @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1050,6 +1052,7 @@ model Booking {
   @@index([userId, status, startTime])
   @@index([eventTypeId, status])
   @@index([userId, createdAt])
+  @@index([updatedAt])
 }
 
 model Tracking {
@@ -1141,6 +1144,7 @@ model SelectedCalendar {
   syncedAt                 DateTime?
   syncErrorAt              DateTime?
   syncErrorCount           Int?      @default(0)
+  lastWebhookReceivedAt    DateTime?
 
   delegationCredential   DelegationCredential? @relation(fields: [delegationCredentialId], references: [id], onDelete: Cascade)
   delegationCredentialId String?
@@ -1788,6 +1792,8 @@ model WebhookScheduledTriggers {
   booking       Booking?  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   // @@partial_index([bookingId])
+  // @@partial_index([webhookId])
+  @@index([startAfter])
 }
 
 enum WorkflowTemplates {
@@ -2449,6 +2455,8 @@ model AccessToken {
 
   platformOAuthClientId String
   userId                Int
+
+  @@index([platformOAuthClientId, expiresAt])
 }
 
 model RefreshToken {
@@ -2595,6 +2603,8 @@ model AttributeOption {
   // Such a relation would require its own table to be managed and we don't need it for now.
   contains      String[]
   assignedUsers AttributeToUser[]
+
+  @@index([attributeId])
 }
 
 model Attribute {
@@ -2653,6 +2663,7 @@ model AttributeToUser {
   updatedByDSync   DSyncData? @relation("updatedByDSync", fields: [updatedByDSyncId], references: [directoryId], onDelete: SetNull)
 
   @@unique([memberId, attributeOptionId])
+  @@index([attributeOptionId])
 }
 
 enum AssignmentReasonEnum {

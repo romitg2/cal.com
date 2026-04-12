@@ -67,6 +67,8 @@ jobs:
         env:
           TRIGGER_ACCESS_TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}
           TRIGGER_DEV_PROJECT_REF: ${{ secrets.TRIGGER_DEV_PROJECT_REF }}
+          TRIGGER_AXIOM_API_TOKEN: ${{ secrets.TRIGGER_AXIOM_API_TOKEN }}
+          TRIGGER_AXIOM_DATASET: ${{ secrets.TRIGGER_AXIOM_DATASET }}
         run: |
           # The CLI outputs the version; id allows us to access outputs.deploymentVersion
           cd packages/features
@@ -91,10 +93,8 @@ jobs:
           # Write to the specific paths
           echo "$CONTENT" > apps/web/trigger.version.ts
           echo "$CONTENT" > apps/api/v2/trigger.version.ts
-          echo "$CONTENT" > apps/api/v1/trigger.version.js
-    
           # Force add to git since these are likely in .gitignore
-          git add -f apps/web/trigger.version.ts apps/api/v2/trigger.version.ts apps/api/v1/trigger.version.js
+          git add -f apps/web/trigger.version.ts apps/api/v2/trigger.version.ts
 
       # 4. Commit everything together
       - name: Commit changes

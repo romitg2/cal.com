@@ -8,6 +8,8 @@ import type {
   EventTypeSetupProps,
   EventTypeUpdateInput,
   FormValues,
+  Host,
+  HostInput,
 } from "@calcom/features/eventtypes/lib/types";
 import { sortHosts } from "@calcom/lib/bookings/hostGroupUtils";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
@@ -21,6 +23,10 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 type Fields = z.infer<typeof eventTypeBookingFieldsSchema>;
+
+export const stripHostsForPayload = (hosts: Host[] | undefined): HostInput[] | undefined => {
+  return hosts?.map(({ name: _name, avatar: _avatar, ...host }) => host);
+};
 
 export const useEventTypeForm = ({
   eventType,
@@ -105,6 +111,17 @@ export const useEventTypeForm = ({
       hideOrganizerEmail: eventType.hideOrganizerEmail,
       metadata: eventType.metadata,
       hosts: eventType.hosts.sort((a, b) => sortHosts(a, b, eventType.isRRWeightsEnabled)),
+      // Delta-based host changes for performance - only track changes, not all 700+ hosts
+      pendingHostChanges: {
+        hostsToAdd: [],
+        hostsToUpdate: [],
+        hostsToRemove: [],
+      },
+      pendingFixedHostChanges: {
+        hostsToAdd: [],
+        hostsToUpdate: [],
+        hostsToRemove: [],
+      },
       hostGroups: eventType.hostGroups || [],
       successRedirectUrl: eventType.successRedirectUrl || "",
       redirectUrlOnNoRoutingFormResponse: eventType.redirectUrlOnNoRoutingFormResponse || "",
@@ -387,12 +404,15 @@ export const useEventTypeForm = ({
     const {
       availability,
       users,
+      hosts,
       scheduleName,
       disabledCancelling,
       disableCancellingScope,
       disabledRescheduling,
       disableReschedulingScope,
       requiresCancellationReason,
+      pendingHostChanges: _phc,
+      pendingFixedHostChanges: _pfhc,
       ...rest
     } = input;
     // Strip children down to only the fields the server schema expects.
@@ -400,9 +420,30 @@ export const useEventTypeForm = ({
     // data that bloats the request payload. With many assigned users (~85+),
     // this can push the request body over the 1MB server limit.
     const strippedChildren = children ? stripChildrenForPayload(children) : undefined;
+    const strippedHosts = stripHostsForPayload(hosts);
+
+    // Send delta directly to backend instead of computing full hosts array
+    const pendingHostChanges = values.pendingHostChanges;
+    const hasHostChanges =
+      pendingHostChanges &&
+      (pendingHostChanges.hostsToAdd.length > 0 ||
+        pendingHostChanges.hostsToUpdate.length > 0 ||
+        pendingHostChanges.hostsToRemove.length > 0 ||
+        pendingHostChanges.clearAllHosts ||
+        pendingHostChanges.clearAllHostLocations);
+
+    const pendingFixedHostChanges = values.pendingFixedHostChanges;
+    const hasFixedHostChanges =
+      pendingFixedHostChanges &&
+      (pendingFixedHostChanges.hostsToAdd.length > 0 ||
+        pendingFixedHostChanges.hostsToUpdate.length > 0 ||
+        pendingFixedHostChanges.hostsToRemove.length > 0 ||
+        pendingFixedHostChanges.clearAllHosts ||
+        pendingFixedHostChanges.clearAllHostLocations);
 
     const payload = {
       ...rest,
+      hosts: strippedHosts,
       length,
       locations,
       recurringEvent,
@@ -424,6 +465,8 @@ export const useEventTypeForm = ({
       customInputs,
       children: strippedChildren,
       assignAllTeamMembers,
+      pendingHostChanges: hasHostChanges ? pendingHostChanges : undefined,
+      pendingFixedHostChanges: hasFixedHostChanges ? pendingFixedHostChanges : undefined,
       multiplePrivateLinks: values.multiplePrivateLinks,
       disableCancelling: disabledCancelling,
       disableCancellingScope,

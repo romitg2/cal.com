@@ -1,3 +1,5 @@
+import { v7 as uuidv7 } from "uuid";
+
 import { withReporting } from "@calcom/lib/sentryWrapper";
 import type { PrismaClient } from "@calcom/prisma";
 import type { Booking } from "@calcom/prisma/client";
@@ -1320,6 +1322,13 @@ export class BookingRepository implements IBookingRepository {
         uid: bookingUid,
       },
       select: bookingSyncSelect,
+    });
+  }
+
+  async findCreatedAtByUid({ bookingUid }: { bookingUid: string }) {
+    return await this.prismaClient.booking.findUnique({
+      where: { uid: bookingUid },
+      select: { createdAt: true },
     });
   }
 
@@ -2646,6 +2655,7 @@ export class BookingRepository implements IBookingRepository {
     return client.booking.create({
       data: {
         uid,
+        uuid: uuidv7({ msecs: startTime.getTime() }),
         userPrimaryEmail,
         title,
         description,
