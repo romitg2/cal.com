@@ -1,5 +1,5 @@
 import type { getEventTypesFromDB } from "@calcom/features/bookings/lib/handleNewBooking/getEventTypesFromDB";
-import { prisma } from "@calcom/prisma";
+import { getDestinationCalendarRepository } from "@calcom/features/di/containers/DestinationCalendar";
 import type { DestinationCalendar } from "@calcom/prisma/client";
 
 import type { BookingSelectResult } from "./bookingSelect";
@@ -20,11 +20,7 @@ export async function getDestinationCalendar({
   }
 
   if (hasOrganizerChanged && newUserId) {
-    const newUserDestinationCalendar = await prisma.destinationCalendar.findFirst({
-      where: {
-        userId: newUserId,
-      },
-    });
+    const newUserDestinationCalendar = await getDestinationCalendarRepository().getByUserId(newUserId);
     if (newUserDestinationCalendar) {
       return [newUserDestinationCalendar];
     }

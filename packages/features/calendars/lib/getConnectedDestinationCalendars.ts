@@ -5,7 +5,7 @@ import {
   getCalendarCredentials,
   getConnectedCalendars,
 } from "@calcom/features/calendars/lib/CalendarManager";
-import { DestinationCalendarRepository } from "@calcom/features/calendars/repositories/DestinationCalendarRepository";
+import { getDestinationCalendarRepository } from "@calcom/features/di/containers/DestinationCalendar";
 import { isDelegationCredential } from "@calcom/lib/delegationCredential";
 import logger from "@calcom/lib/logger";
 import { SelectedCalendarRepository } from "@calcom/features/selectedCalendar/repositories/SelectedCalendarRepository";
@@ -70,9 +70,7 @@ async function handleNoConnectedCalendars(user: UserWithCalendars) {
   log.debug(`No connected calendars, deleting destination calendar if it exists for user ${user.id}`);
 
   if (!user.destinationCalendar) return user;
-  await prisma.destinationCalendar.delete({
-    where: { userId: user.id },
-  });
+  await getDestinationCalendarRepository().deleteByUserId(user.id);
 
   return {
     ...user,
@@ -129,19 +127,21 @@ async function handleNoDestinationCalendar({
     }
   }
 
-  user.destinationCalendar = await DestinationCalendarRepository.createIfNotExistsForUser({
-    userId: user.id,
-    integration,
-    externalId,
-    primaryEmail,
-    ...(!isDelegationCredential({ credentialId })
-      ? {
-          credentialId,
-        }
-      : {
-          delegationCredentialId,
-        }),
+  const destCalRepo = getDestinationCalendarRepository();
+  const existing = await destCalRepo.find({
+    where: { userId: user.id, integration, externalId, eventTypeId: null },
   });
+  user.destinationCalendar =
+    existing ??
+    (await destCalRepo.create({
+      userId: user.id,
+      integration,
+      externalId,
+      primaryEmail,
+      ...(!isDelegationCredential({ credentialId })
+        ? { credentialId }
+        : { delegationCredentialId }),
+    } as never));
 
   return {
     user,
@@ -178,13 +178,10 @@ async function handleDestinationCalendarNotInConnectedCalendars({
     }
   }
 
-  user.destinationCalendar = await prisma.destinationCalendar.update({
-    where: { userId: user.id },
-    data: {
-      integration,
-      externalId,
-      primaryEmail,
-    },
+  user.destinationCalendar = await getDestinationCalendarRepository().updateByUserId(user.id, {
+    integration,
+    externalId,
+    primaryEmail,
   });
 
   return {

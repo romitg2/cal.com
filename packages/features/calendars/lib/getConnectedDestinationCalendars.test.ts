@@ -27,7 +27,8 @@ const {
     },
   },
   mockDestCalRepo: {
-    createIfNotExistsForUser: vi.fn().mockResolvedValue({
+    find: vi.fn().mockResolvedValue(null),
+    create: vi.fn().mockResolvedValue({
       id: 1,
       userId: 1,
       integration: "google_calendar",
@@ -36,6 +37,8 @@ const {
       eventTypeId: null,
       primaryEmail: "user@example.com",
     }),
+    deleteByUserId: vi.fn().mockResolvedValue({}),
+    updateByUserId: vi.fn().mockResolvedValue({ id: 1, integration: "google_calendar", externalId: "cal-1" }),
   },
   mockSelectedCalRepo: {
     createIfNotExists: vi.fn().mockResolvedValue({}),
@@ -61,8 +64,8 @@ vi.mock("@calcom/prisma", () => ({
   prisma: mockPrisma,
 }));
 
-vi.mock("@calcom/features/calendars/repositories/DestinationCalendarRepository", () => ({
-  DestinationCalendarRepository: mockDestCalRepo,
+vi.mock("@calcom/features/di/containers/DestinationCalendar", () => ({
+  getDestinationCalendarRepository: () => mockDestCalRepo,
 }));
 
 vi.mock("@calcom/features/selectedCalendar/repositories/SelectedCalendarRepository", () => ({
@@ -158,9 +161,7 @@ describe("getConnectedDestinationCalendars", () => {
         prisma: mockPrisma as never,
       });
 
-      expect(mockPrisma.destinationCalendar.delete).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { userId: 1 } })
-      );
+      expect(mockDestCalRepo.deleteByUserId).toHaveBeenCalledWith(1);
     });
 
     it("should create default destination calendar when user has no destinationCalendar", async () => {
@@ -197,7 +198,7 @@ describe("getConnectedDestinationCalendars", () => {
         prisma: mockPrisma as never,
       });
 
-      expect(mockDestCalRepo.createIfNotExistsForUser).toHaveBeenCalledWith(
+      expect(mockDestCalRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 1, integration: "google_calendar", externalId: "primary-cal" })
       );
     });
@@ -243,11 +244,9 @@ describe("getConnectedDestinationCalendars", () => {
         prisma: mockPrisma as never,
       });
 
-      expect(mockPrisma.destinationCalendar.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { userId: 1 },
-          data: expect.objectContaining({ externalId: "new-primary" }),
-        })
+      expect(mockDestCalRepo.updateByUserId).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ externalId: "new-primary" })
       );
     });
 

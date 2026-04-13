@@ -7,6 +7,7 @@ import { getBookingFieldsWithSystemFields } from "@calcom/features/bookings/lib/
 import { getOrganizationRepository } from "@calcom/features/ee/organizations/di/OrganizationRepository.container";
 import { getBookerBaseUrl } from "@calcom/features/ee/organizations/lib/getBookerUrlServer";
 import { OrganizationRepository } from "@calcom/features/ee/organizations/repositories/OrganizationRepository";
+import { getDestinationCalendarRepository } from "@calcom/features/di/containers/DestinationCalendar";
 import { EventTypeRepository } from "@calcom/features/eventtypes/repositories/eventTypeRepository";
 import { UserRepository } from "@calcom/features/users/repositories/UserRepository";
 import { getTranslation } from "@calcom/i18n/server";
@@ -255,12 +256,7 @@ export const getEventTypeById = async ({
 
   let destinationCalendar = eventTypeObject.destinationCalendar;
   if (!destinationCalendar) {
-    destinationCalendar = await prisma.destinationCalendar.findFirst({
-      where: {
-        userId: userId,
-        eventTypeId: null,
-      },
-    });
+    destinationCalendar = await getDestinationCalendarRepository().findByUserIdWithoutEventType(userId);
   }
 
   const finalObj = {

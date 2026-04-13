@@ -13,6 +13,7 @@ import { getTranslation } from "@calcom/i18n/server";
 import { buildNonDelegationCredential } from "@calcom/lib/delegationCredential";
 import { isPrismaObjOrUndefined } from "@calcom/lib/isPrismaObj";
 import { parseRecurringEvent } from "@calcom/lib/isRecurringEvent";
+import { getDestinationCalendarRepository } from "@calcom/features/di/containers/DestinationCalendar";
 import { bookingMinimalSelect, prisma } from "@calcom/prisma";
 import type { Prisma } from "@calcom/prisma/client";
 import { AppCategories, BookingStatus } from "@calcom/prisma/enums";
@@ -130,18 +131,13 @@ const handleDeleteCredential = async ({
       credential.app?.categories.includes(AppCategories.calendar) &&
       eventType.destinationCalendar?.credential?.appId === credential.appId
     ) {
-      const destinationCalendar = await prisma.destinationCalendar.findUnique({
-        where: {
-          id: eventType.destinationCalendar?.id,
-        },
-      });
+      const destCalRepo = getDestinationCalendarRepository();
+      const destinationCalendar = await destCalRepo.findById(
+        eventType.destinationCalendar?.id as number
+      );
 
       if (destinationCalendar) {
-        await prisma.destinationCalendar.delete({
-          where: {
-            id: destinationCalendar.id,
-          },
-        });
+        await destCalRepo.deleteById(destinationCalendar.id);
       }
     }
 

@@ -3,7 +3,7 @@ import { ErrorWithCode } from "@calcom/lib/errors";
 
 import type { EventTypeRepository } from "@calcom/features/eventtypes/repositories/eventTypeRepository";
 import { getCalendarCredentials, getConnectedCalendars } from "../lib/CalendarManager";
-import type { DestinationCalendarRepository } from "../repositories/DestinationCalendarRepository";
+import type { DestinationCalendarRepository } from "../repositories/destination-calendar-repository";
 
 type ConnectedCalendarCalendar = NonNullable<
   Awaited<ReturnType<typeof getConnectedCalendars>>["connectedCalendars"][number]["calendars"]

@@ -32,6 +32,7 @@ import { isPrismaObjOrUndefined } from "@calcom/lib/isPrismaObj";
 import logger from "@calcom/lib/logger";
 import { getTranslation } from "@calcom/i18n/server";
 import { getTimeFormatStringFromUserTimeFormat } from "@calcom/lib/timeFormat";
+import { getDestinationCalendarRepository } from "@calcom/features/di/containers/DestinationCalendar";
 import { prisma } from "@calcom/prisma";
 import type { EventTypeMetadata, PlatformClientParams } from "@calcom/prisma/zod-utils";
 import { userMetadata as userMetadataSchema } from "@calcom/prisma/zod-utils";
@@ -342,11 +343,7 @@ export const roundRobinReassignment = async ({
 
   // If changed owner, also change destination calendar
   const previousHostDestinationCalendar = hasOrganizerChanged
-    ? await prisma.destinationCalendar.findFirst({
-        where: {
-          userId: originalOrganizer.id,
-        },
-      })
+    ? await getDestinationCalendarRepository().getByUserId(originalOrganizer.id)
     : null;
 
   const evt: CalendarEvent = {

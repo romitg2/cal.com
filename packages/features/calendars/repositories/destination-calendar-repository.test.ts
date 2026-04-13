@@ -4,7 +4,10 @@ const { mockPrisma, mockBuildCredentialPayload } = vi.hoisted(() => ({
   mockPrisma: {
     destinationCalendar: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       create: vi.fn(),
+      delete: vi.fn(),
+      update: vi.fn(),
       updateMany: vi.fn(),
       upsert: vi.fn(),
     },
@@ -26,7 +29,7 @@ vi.mock("@calcom/app-store/delegationCredential", () => ({
   getCredentialForSelectedCalendar: vi.fn(),
 }));
 
-import { DestinationCalendarRepository } from "./DestinationCalendarRepository";
+import { DestinationCalendarRepository } from "./destination-calendar-repository";
 
 describe("DestinationCalendarRepository", () => {
   beforeEach(() => {
@@ -174,7 +177,7 @@ describe("DestinationCalendarRepository", () => {
     });
   });
 
-  describe("static methods", () => {
+  describe("additional instance methods", () => {
     describe("fn: create", () => {
       it("should create a destination calendar", async () => {
         const data = {
@@ -183,42 +186,10 @@ describe("DestinationCalendarRepository", () => {
         };
         mockPrisma.destinationCalendar.create.mockResolvedValue({ id: 1, ...data });
 
-        const result = await DestinationCalendarRepository.create(data as never);
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        const result = await repo.create(data as never);
 
         expect(result).toEqual({ id: 1, ...data });
-        expect(mockPrisma.destinationCalendar.create).toHaveBeenCalledWith({ data });
-      });
-    });
-
-    describe("fn: createIfNotExistsForUser", () => {
-      it("should return existing calendar if one with same user/integration/externalId exists", async () => {
-        const existing = {
-          id: 5,
-          userId: 1,
-          integration: "google_calendar",
-          externalId: "cal-123",
-        };
-        mockPrisma.destinationCalendar.findFirst.mockResolvedValue(existing);
-
-        const result = await DestinationCalendarRepository.createIfNotExistsForUser({
-          userId: 1,
-          integration: "google_calendar",
-          externalId: "cal-123",
-        } as never);
-
-        expect(result).toEqual(existing);
-        expect(mockPrisma.destinationCalendar.create).not.toHaveBeenCalled();
-      });
-
-      it("should create a new calendar when no conflicting one exists", async () => {
-        mockPrisma.destinationCalendar.findFirst.mockResolvedValue(null);
-        const newCal = { id: 10, userId: 1, integration: "google_calendar", externalId: "new-cal" };
-        mockPrisma.destinationCalendar.create.mockResolvedValue(newCal);
-
-        const data = { userId: 1, integration: "google_calendar", externalId: "new-cal" };
-        const result = await DestinationCalendarRepository.createIfNotExistsForUser(data as never);
-
-        expect(result).toEqual(newCal);
         expect(mockPrisma.destinationCalendar.create).toHaveBeenCalledWith({ data });
       });
     });
@@ -228,7 +199,8 @@ describe("DestinationCalendarRepository", () => {
         const cal = { id: 1, userId: 5, integration: "google_calendar" };
         mockPrisma.destinationCalendar.findFirst.mockResolvedValue(cal);
 
-        const result = await DestinationCalendarRepository.getByUserId(5);
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        const result = await repo.getByUserId(5);
 
         expect(result).toEqual(cal);
         expect(mockPrisma.destinationCalendar.findFirst).toHaveBeenCalledWith({
@@ -239,23 +211,10 @@ describe("DestinationCalendarRepository", () => {
       it("should return null when no calendar exists for user", async () => {
         mockPrisma.destinationCalendar.findFirst.mockResolvedValue(null);
 
-        const result = await DestinationCalendarRepository.getByUserId(999);
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        const result = await repo.getByUserId(999);
 
         expect(result).toBeNull();
-      });
-    });
-
-    describe("fn: getByEventTypeId", () => {
-      it("should find destination calendar by eventTypeId", async () => {
-        const cal = { id: 2, eventTypeId: 10, integration: "office365_calendar" };
-        mockPrisma.destinationCalendar.findFirst.mockResolvedValue(cal);
-
-        const result = await DestinationCalendarRepository.getByEventTypeId(10);
-
-        expect(result).toEqual(cal);
-        expect(mockPrisma.destinationCalendar.findFirst).toHaveBeenCalledWith({
-          where: { eventTypeId: 10 },
-        });
       });
     });
 
@@ -264,7 +223,8 @@ describe("DestinationCalendarRepository", () => {
         const cal = { id: 3, integration: "google_calendar" };
         mockPrisma.destinationCalendar.findFirst.mockResolvedValue(cal);
 
-        const result = await DestinationCalendarRepository.find({
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        const result = await repo.find({
           where: { integration: "google_calendar", userId: 1 },
         });
 
@@ -277,9 +237,123 @@ describe("DestinationCalendarRepository", () => {
       it("should return null when no match found", async () => {
         mockPrisma.destinationCalendar.findFirst.mockResolvedValue(null);
 
-        const result = await DestinationCalendarRepository.find({
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        const result = await repo.find({
           where: { userId: 999 },
         });
+
+        expect(result).toBeNull();
+      });
+    });
+
+    describe("fn: findById", () => {
+      it("should find destination calendar by id", async () => {
+        const cal = { id: 1, userId: 5, integration: "google_calendar" };
+        mockPrisma.destinationCalendar.findUnique.mockResolvedValue(cal);
+
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        const result = await repo.findById(1);
+
+        expect(result).toEqual(cal);
+        expect(mockPrisma.destinationCalendar.findUnique).toHaveBeenCalledWith({
+          where: { id: 1 },
+        });
+      });
+
+      it("should return null when not found", async () => {
+        mockPrisma.destinationCalendar.findUnique.mockResolvedValue(null);
+
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        const result = await repo.findById(999);
+
+        expect(result).toBeNull();
+      });
+    });
+
+    describe("fn: deleteById", () => {
+      it("should delete destination calendar by id", async () => {
+        const cal = { id: 1, userId: 5 };
+        mockPrisma.destinationCalendar.delete.mockResolvedValue(cal);
+
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        const result = await repo.deleteById(1);
+
+        expect(result).toEqual(cal);
+        expect(mockPrisma.destinationCalendar.delete).toHaveBeenCalledWith({
+          where: { id: 1 },
+        });
+      });
+    });
+
+    describe("fn: deleteByUserId", () => {
+      it("should delete destination calendar by userId", async () => {
+        const cal = { id: 1, userId: 5 };
+        mockPrisma.destinationCalendar.delete.mockResolvedValue(cal);
+
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        const result = await repo.deleteByUserId(5);
+
+        expect(result).toEqual(cal);
+        expect(mockPrisma.destinationCalendar.delete).toHaveBeenCalledWith({
+          where: { userId: 5 },
+        });
+      });
+    });
+
+    describe("fn: updateByUserId", () => {
+      it("should update destination calendar by userId", async () => {
+        const updated = { id: 1, userId: 5, integration: "office365_calendar", externalId: "new-cal" };
+        mockPrisma.destinationCalendar.update.mockResolvedValue(updated);
+
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        const result = await repo.updateByUserId(5, {
+          integration: "office365_calendar",
+          externalId: "new-cal",
+        });
+
+        expect(result).toEqual(updated);
+        expect(mockPrisma.destinationCalendar.update).toHaveBeenCalledWith({
+          where: { userId: 5 },
+          data: { integration: "office365_calendar", externalId: "new-cal" },
+        });
+      });
+
+      it("should update with optional primaryEmail", async () => {
+        mockPrisma.destinationCalendar.update.mockResolvedValue({ id: 1 });
+
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        await repo.updateByUserId(5, {
+          integration: "google_calendar",
+          externalId: "cal-1",
+          primaryEmail: "user@example.com",
+        });
+
+        expect(mockPrisma.destinationCalendar.update).toHaveBeenCalledWith({
+          where: { userId: 5 },
+          data: { integration: "google_calendar", externalId: "cal-1", primaryEmail: "user@example.com" },
+        });
+      });
+    });
+
+    describe("fn: findByUserIdWithoutEventType", () => {
+      it("should find destination calendar for user without event type", async () => {
+        const cal = { id: 1, userId: 5, eventTypeId: null };
+        mockPrisma.destinationCalendar.findFirst.mockResolvedValue(cal);
+
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        const result = await repo.findByUserIdWithoutEventType(5);
+
+        expect(result).toEqual(cal);
+        expect(mockPrisma.destinationCalendar.findFirst).toHaveBeenCalledWith({
+          where: { userId: 5, eventTypeId: null },
+        });
+      });
+
+      it("should return null when none found", async () => {
+        mockPrisma.destinationCalendar.findFirst.mockResolvedValue(null);
+
+        const repo = new DestinationCalendarRepository(mockPrisma as never);
+        const result = await repo.findByUserIdWithoutEventType(999);
 
         expect(result).toBeNull();
       });

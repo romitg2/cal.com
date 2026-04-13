@@ -34,6 +34,7 @@ import { IdempotencyKeyService } from "@calcom/lib/idempotencyKey/idempotencyKey
 import { isPrismaObjOrUndefined } from "@calcom/lib/isPrismaObj";
 import logger from "@calcom/lib/logger";
 import { getTimeFormatStringFromUserTimeFormat } from "@calcom/lib/timeFormat";
+import { getDestinationCalendarRepository } from "@calcom/features/di/containers/DestinationCalendar";
 import { prisma } from "@calcom/prisma";
 import { WorkflowActions, WorkflowMethods, WorkflowTriggerEvents } from "@calcom/prisma/enums";
 import type { EventTypeMetadata, PlatformClientParams } from "@calcom/prisma/zod-utils";
@@ -382,9 +383,7 @@ export const roundRobinManualReassignment = async ({
   });
 
   const previousHostDestinationCalendar = hasOrganizerChanged
-    ? await prisma.destinationCalendar.findFirst({
-        where: { userId: originalOrganizer.id },
-      })
+    ? await getDestinationCalendarRepository().getByUserId(originalOrganizer.id)
     : null;
 
   const apps = eventTypeAppMetadataOptionalSchema.parse(eventType?.metadata?.apps);

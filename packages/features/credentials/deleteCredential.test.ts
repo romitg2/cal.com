@@ -1,6 +1,6 @@
 import { addEventTypesToDb, mockNoTranslations } from "@calcom/testing/lib/bookingScenario/bookingScenario";
 import { PrismaAppRepository } from "@calcom/features/apps/repository/PrismaAppRepository";
-import { DestinationCalendarRepository } from "@calcom/features/calendars/repositories/DestinationCalendarRepository";
+import { getDestinationCalendarRepository } from "@calcom/features/di/containers/DestinationCalendar";
 import { CredentialRepository } from "@calcom/features/credentials/repositories/CredentialRepository";
 import { EventTypeRepository } from "@calcom/features/eventtypes/repositories/eventTypeRepository";
 import { UserRepository } from "@calcom/features/users/repositories/UserRepository";
@@ -95,7 +95,9 @@ describe("deleteCredential", () => {
         appId: "google-calendar",
       });
 
-      await DestinationCalendarRepository.create({
+      const destCalRepo = getDestinationCalendarRepository();
+
+      await destCalRepo.create({
         id: 1,
         integration: "google_calendar",
         externalId: "test@google.com",
@@ -104,7 +106,7 @@ describe("deleteCredential", () => {
         credentialId: credential.id,
       });
 
-      await DestinationCalendarRepository.create({
+      await destCalRepo.create({
         id: 2,
         integration: "google_calendar",
         externalId: "test@google.com",
@@ -113,18 +115,22 @@ describe("deleteCredential", () => {
         credentialId: credential.id,
       });
 
-      const userCalendar = await DestinationCalendarRepository.getByUserId(user.id);
+      const userCalendar = await destCalRepo.getByUserId(user.id);
       expect(userCalendar).toBeDefined();
 
-      const eventTypeCalendar = await DestinationCalendarRepository.getByEventTypeId(eventTypes[0].id);
+      const eventTypeCalendar = await prisma.destinationCalendar.findFirst({
+        where: { eventTypeId: eventTypes[0].id },
+      });
       expect(eventTypeCalendar).toBeDefined();
 
       await handleDeleteCredential({ userId: user.id, userMetadata: user.metadata, credentialId: 123 });
 
-      const userCalendarAfter = await DestinationCalendarRepository.getByUserId(user.id);
+      const userCalendarAfter = await destCalRepo.getByUserId(user.id);
       expect(userCalendarAfter).toBeNull();
 
-      const eventTypeCalendarAfter = await DestinationCalendarRepository.getByEventTypeId(eventTypes[0].id);
+      const eventTypeCalendarAfter = await prisma.destinationCalendar.findFirst({
+        where: { eventTypeId: eventTypes[0].id },
+      });
       expect(eventTypeCalendarAfter).toBeNull();
     });
 

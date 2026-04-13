@@ -7,6 +7,7 @@ import { appStoreMetadata } from "@calcom/app-store/appStoreMetaData";
 import type { LocationObject } from "@calcom/app-store/locations";
 import { isConferencing as isConferencingApp } from "@calcom/app-store/utils";
 import { getServerSession } from "@calcom/features/auth/lib/getServerSession";
+import { getDestinationCalendarRepository } from "@calcom/features/di/containers/DestinationCalendar";
 import { UserRepository } from "@calcom/features/users/repositories/UserRepository";
 import { AppOnboardingSteps } from "@calcom/lib/apps/appOnboardingSteps";
 import { CAL_URL } from "@calcom/lib/constants";
@@ -338,9 +339,7 @@ const getEventTypeGroupsForStep = async (
   }
 
   if (isConferencing && groups) {
-    const destinationCalendar = await prisma.destinationCalendar.findFirst({
-      where: { userId: user.id, eventTypeId: null },
-    });
+    const destinationCalendar = await getDestinationCalendarRepository().findByUserIdWithoutEventType(user.id);
 
     groups.forEach((group) => {
       group.eventTypes = group.eventTypes.map((eventType) => {
